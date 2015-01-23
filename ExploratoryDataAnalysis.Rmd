@@ -1,0 +1,522 @@
+Exploring 2012 Presidential Campaign Contributions in Ohio by Aaron Rank
+========================================================
+
+```{r, message=F, warning=F}
+library(ggplot2)
+library(arm)
+library(ggvis)
+library(cvTools)
+library(pROC)
+library(reshape2)
+library(LogisticDx)
+library(plyr)
+library(gam)
+library(penalized)
+library(dplyr)
+library(lubridate)
+library(Hmisc)
+library(jsonlite) #http://stackoverflow.com/questions/2061897/parse-json-with-r
+library(zoo)
+require(scales)
+require(stringr)
+require(zipcode)
+library(caret)
+library(AnomalyDetection)
+library(BreakoutDetection)
+theme_set(theme_minimal(20))
+```
+
+#http://cran.r-project.org/web/packages/gender/vignettes/predicting-gender.html
+# Analysis
+
+## Question - What is the probability that someone will vote either Democrat or Republican?
+
+### Load the Data
+
+```{r, message=F, warning=F}
+
+d = read.csv('~/projects/udacity_DataR/data_w_age.csv',stringsAsFactors = FALSE)
+d <- subset(d, estimated_salary!= 'No Data ')
+d <- subset(d, cand_party == 'D' | cand_party == 'R')
+d$estimated_salary <- as.numeric(d$estimated_salary)
+d$timestamp <- as.Date(d$contb_receipt_dt)
+d$count <- d$contb_receipt_amt
+d$timestamp <- c(d$timestamp)
+by.date <- groupData(d, timestamp, cand_party)
+by.salary <- groupData(d, estimated_salary, cand_party)
+
+ggplot(d, aes(x=log(d$estimated_salary))) + geom_density() + facet_wrap(~ cand_party) + scale_x_continuous(labels = comma) #+ xlim(0,70000)
+ggplot(d, aes(y=sqrt(estimated_salary), x=log(contb_receipt_amt))) + geom_point() + scale_y_continuous(labels = comma) + facet_wrap(~ cand_party) + geom_smooth(method='lm')
+
+d %>% 
+  ggvis(~log(estimated_salary), ~log(contb_receipt_amt)) %>% 
+  layer_points(fill = ~cand_party)
+
+library(dplyr)
+
+colnames(d)
+lm.data <- d[c(10, 19, 20, 25, 26, 29, 30, 31, 32,33,21)]
+lm.data$cand_party <- ifelse(lm.data$cand_party == 'D', 1, 0)
+lm.data$gender <- ifelse(lm.data$gender == 'male',1,0)
+lm.data$general_election <- ifelse(d$election_tp == 'G2012',1,0)
+lm.data$contb_amt_over_500 <- ifelse(lm.data$contb_receipt_amt >= 3000, 1, 0)
+
+
+smp_size <- floor(0.75 * nrow(lm.data))
+
+
+## set the seed to make your partition reproductible
+set.seed(123)
+
+train_ind <- sample(seq_len(nrow(lm.data)), size = smp_size)
+train <- lm.data[train_ind, ]
+test <- lm.data[-train_ind, ]
+
+fit <- glm(cand_party ~ log(contb_receipt_amt+1) + log(estimated_salary+1) + gender + cbus + cincy + cleveland + dayton  + log(elect_delta + 1) + general_election +  log(population+1)+ multiple_contb, data=train, family="binomial")
+
+predpr <- predict(fit, newdata=test,type="link")
+coefplot(fit)
+g <- roc(test$cand_party ~ predpr)
+plot(g)
+
+
+cv.fit <- cv.glm(train, fit, K=10)
+
+cand_party <- train$cand_party
+trains <- train[c(1:9,11)]
+svm.fit <- train(trains, cand_party,method="svmLinear", trControl = trainControl(method = "boot"))
+
+
+rows <- paste(d$contbr_nm, d$contbr_city, d$contbr_employer, sep=" ")
+lm.data$multiple_contb <- ifelse(duplicated(rows) == TRUE, 1, 0)
+
+lines(lowess(predict(fit),residuals(fit)),col="black",lwd=2)
+# delta is the cross-validated prediction error where:
+# 
+# The first number is the raw leave-one-out, or lieu cross-validation result.
+# The second one is a bias-corrected version of it.
+# The bias correction has to do with the fact that the data set that we train it on is slightly smaller than the one that we actually would like to get the error for, which is the full data set of size n. It turns out that has more of an effect for k-fold cross-validation.
+# 
+# cv.glm does the computation by brute force by refitting the model all the N times and is then slow. It doesn't exploit the nice simple below LOOCV formula.
+
+
+
+cbus <- as.character(c(43002, 43004, 43016, 43017, 43026, 43035, 43054, 43065, 43081, 43082, 43085, 43119, 43123, 43137, 43147, 43201, 43202, 43203, 43204, 43205, 43206, 43207, 43210, 43211, 43212, 43213, 43214, 43215, 43217, 43219, 43220, 43221, 43222, 43223, 43224, 43227, 43228, 43229, 43230, 43231, 43235, 43240))
+
+cleveland <- as.character(c(44101, 44103, 44104, 44105, 44106, 44107, 44111, 44112, 44113, 44114, 44115, 44117, 44119, 44120, 44121, 44125, 44127, 44134))
+
+dayton <- as.character(c(45377, 45402, 45403, 45404, 45405, 45406, 45409, 45410, 45414, 45416, 45417, 45419, 45420, 45424, 45426, 45428))
+
+cincy <- as.character(c(45202, 45203, 45204, 45205, 45206, 45207, 45208, 45209, 45212, 45214, 45216, 45217, 45219, 45220, 45223, 45224, 45225, 45226, 45227, 45229, 45230, 45231, 45232, 45239, 45243))
+
+toledo <- as.character(c(43601,43603,43604,43605,43606,43607,43608,43609,43610,43611,43612,43613,43614,43615,43617,43620,43623,43635,43652,43654,43656,43657,43659,43660,43661,43666,43667,43681,43682,43697,43699))
+
+add_city <- function(city){
+   sapply(d$contbr_zip, function(zip){
+    if (substring(as.character(zip),1,5) %in% city){
+      1
+    }
+    else{
+      0
+    }
+    })
+}
+lm.data$cincy <- add_city(cincy)
+lm.data$cbus <- add_city(cbus)
+lm.data$cleveland <- add_city(cleveland)
+lm.data$dayton <- add_city(dayton)
+lm.data$toledo <- add_city(toledo)
+
+set.seed(1)
+
+performance <- data.frame()
+
+for (i in 1:20)
+{
+  smp_size <- floor(0.75 * nrow(lm.data))
+  indices <- sample(seq_len(nrow(lm.data)), size = smp_size)
+training.x <- as.matrix(lm.data[indices,c(1:10,12:16) ])
+training.y <- as.matrix(lm.data[indices,c(11)])
+
+  test.x <- as.matrix(lm.data[-indices,c(1:10,12:16)  ])
+  test.y <- as.matrix(lm.data[-indices,c(11)])
+
+  for (lambda in c(0.0000001, 0.00001, 0.0001))
+  {
+    glm.fit <- glmnet(training.x, training.y, family = 'binomial')
+    predicted.y <- ifelse(predict(glm.fit, test.x, s = lambda) > 0, 1, 0)
+    error.rate <- mean(predicted.y != test.y)
+
+    performance <- rbind(performance,
+                         data.frame(Lambda = lambda,
+                                    Iteration = i,
+                                    ErrorRate = error.rate))
+  }
+}
+
+
+ggplot(performance, aes(x = Lambda, y = ErrorRate)) +
+    stat_summary(fun.data = 'mean_cl_boot', geom = 'errorbar') +
+    stat_summary(fun.data = 'mean_cl_boot', geom = 'point') +
+    scale_x_log10()
+
+
+
+```
+
+```{r, message=F, warning=F}
+
+
+######## map plotting #################
+
+
+data(zipcode)
+data.gender.predicted$zip <- clean.zipcodes(data.gender.predicted$contbr_zip)
+oh <- subset(zipcode, state=='OH') # zipcode package would change my zipcode in 'data' variable to zip codes in MA for some reason. Subsetting only Ohio values from zipcode seemed to solve this issue
+map.gender.data <- merge(data.gender.predicted, oh, by.x = as.character('zip'), by.y = 'zip')
+map.data <- merge(subset(data, contb_receipt_amt > 0), oh, by.x='contbr_zip', by.y='zip')
+map.data.2<- groupData(map.data, contb_bins,longitude, latitude, cand_party)
+g = ggplot(data=map.data.2) + geom_point(aes(x=longitude, y=latitude, color=contb_bins)) +  scale_colour_brewer(palette="Set1")+ facet_wrap(~ cand_party)
+
+g <- ggplot(data=subset(map.data,cand_party == 'D' | cand_party == 'R'),aes(x=longitude, y=latitude, color=cand_party, size = contb_receipt_amt)) + geom_point(position = position_jitter(w=.08,h=.08)) + scale_size_continuous(breaks = c(50,100,500,1000,2500,5000,10000),range=c(1,15)) + labs(x=NULL, y=NULL)#xlab(NULL) + ylab(NULL)  #AWESOME
+g <- g + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.ticks=element_blank(),axis.text.x=element_blank(),axis.text.y=element_blank())
+g
+
+    ggplot(data=map.data) + geom_point(aes(x=longitude, y=latitude, color=contb_receipt_amt)) + scale_colour_gradient(limits=c(40, 3000), low="red")
+g = g + theme_bw() + scale_x_continuous(limits = c(-85,-80))
+g = g + scale_y_continuous(limits = c(38,42))
+
+g
+
+
+######## map plotting #################
+
+
+
+data <- read.csv('~/projects/udacity_DataR/P00000001-OH.csv', sep=',',row.names=NULL,stringsAsFactors = FALSE)
+#head(data)
+colnames(data)[1:18] <- colnames(data)[2:19]
+data <- data[1:18]
+pops <- fromJSON('~/projects/udacity_DataR/ohio_city_populations.json') # census data
+data$population <- sapply(data$contbr_city,function(x) { 
+  ifelse(x %in% names(pops),return(pops[as.character(x)]),return(NA))
+  }) # returns a list
+
+data$population <- as.numeric(data$population) # I only want the population values
+
+data$contb_receipt_dt <- as.Date(data$contb_receipt_dt, "%d-%b-%y")
+election_day <- as.Date("2012-11-06")
+data$elect_delta <- sapply(data$contb_receipt_dt,function(x) {return(election_day - x)}) # days from general election day
+data$contbr_zip <- substr(as.character(data$contbr_zip),1,5) # zip codes should be treated as categorical variables and I want to limit it to the main 5 digit zip code without the additional information
+
+
+cand_party = list()    
+for (cand in unique(data$cand_nm)){
+   if(cand == 'Obama, Barack'){
+    cand_party['Obama, Barack'] <- 'D'
+  }     
+  else if(cand == 'Stein, Jill'){
+    cand_party['Stein, Jill'] <- 'G'
+  } else if(cand == 'Johnson, Gary Earl'){
+    cand_party['Johnson, Gary Earl'] <- 'L'
+  } else{
+    cand_party[as.character(cand)] <- 'R'
+  }
+}
+data$cand_party <- sapply(as.character(data$cand_nm), function(x) {as.character(cand_party[x])})
+
+data$contb_bins <- cut(data$contb_receipt_amt,breaks=c(0,50,100,250,500,1000,1500,2500,3500,15000))
+data$pop_bins <- cut(data$population, breaks=c(0,5000,25000,50000,100000,500000,1000000))
+data$elect_delta_bins <- cut(data$elect_delta,breaks=c(0,7,14,30,90,180,365,700,1500))
+data <- subset(data,contb_receipt_amt >0) # I'm not concerned with negative donations - I'm not really sure what they mean 
+data <- na.omit(data) # there are 100k+ rows and it's exploratory analysis so I'm going to just going to drop all NAs - if I wanted to publish my analysis or put it into "production", I would revisit the NAs to ensure they were random as opposed to systematic. Though, I guess it could be argued that understanding if NAs are random or systematic could be considered part of EDA. 
+
+dem <- subset(data, cand_party == 'D')
+rep <- subset(data, cand_party == 'R')
+
+```
+The dataset had each column name shifted to the right one place with an additional column at the end filled with NAs. I renamed the columns and dropped the last column.
+
+### Summary of the Data Set
+```{r, message=F, warning=F}
+
+
+dim(data)
+names(data)
+str(data)
+summary(data) # many variables make it difficult to grok the data
+describe(data)
+
+
+groupData <- function(initial_data,...){
+# helper function to make frequent grouping of data with diffrent variables easier
+gp_data <-group_by(na.omit(initial_data),...)
+gps_data<-summarise(gp_data, 
+                  mean_contb = mean(contb_receipt_amt),
+                  median_contb = median(contb_receipt_amt),
+                  sum_contb = sum(contb_receipt_amt),
+                  mean_pop = mean(population),
+                  median_pop = median(population),
+                  median_elect_delta = median(elect_delta),
+                  mean_elect_delta = mean(elect_delta),
+                  count = n()) 
+gps_data
+}
+
+```
+### Observations from the Summary
+The data contains 19 features which makes it difficult to understand. Ideally, I would like to reduce the number of features to no more than 10. However, what I can tell is that the majority of the conbributions were made to Barack Obama (71%) and Mitt Romney (22%) with the other 12 candidates splitting the remaining 7% of contributions. I can also see that the candidate's party is not included the dataset - it will be necessary to add this information as it is vital to answering the question, "to which party did the contributor donate"?
+
+## Understand the Distribution of Single Variables
+
+### Data
+http://webcache.googleusercontent.com/search?q=cache:eE9YB7REtkEJ:ftp://ftp.fec.gov/FEC/Presidential_Map/2012/DATA_DICTIONARIES/CONTRIBUTOR_FORMAT.txt+&cd=2&hl=en&ct=clnk&gl=us
+
+```{r, message=F, warning=F}
+variable_info <- read.csv('~/projects/udacity_DataR/meta_data.csv')
+variable_info
+```
+Data Type:  S = string (alpha or alpha-numeric); D = date; N = numeric  
+
+
+### contb_receipt_amt
+```{r, message=F, warning=F}
+ggplot(aes(data$contb_receipt_amt), data=data) + geom_density() + xlim(-100,1000)
+ggplot(aes(data$contb_receipt_amt), data=data) + geom_histogram() + xlim(0,1000)
+ggplot(aes(log(data$contb_receipt_amt)), data=data) + geom_density()
+```
+The contribution is not normally distributed and is multi-modal. It appears that the most frequent contribution amounts were less than or equal to $100 with a $100 donation being the most frequent. One can also see that the data contains peaks at specific values such as 100, 250, 500, 1,000 - I can infer that this is a result of campaigns explicity asking for specific amounts (e.g. they ask for donations of $500, $1000, $1500 but do not ask for $400 or $900). 
+
+### population
+```{r, message=F, warning=F}
+ggplot(aes(data$population), data=data) + geom_density() + scale_x_continuous(labels = comma) #+ xlim(0, 1000000)
+ggplot(aes(data$population), data=data) + geom_histogram()
+#detach("package:Hmisc", unload=TRUE)
+summary(data$population)
+```
+The population data is multi-modal - the majority of contributors live in a city with a population less than 100,000. 
+
+### elect_delta
+```{r, message=F, warning=F}
+qplot(data$elect_delta)
+
+```
+elect_delta follows the power law - the number of contributions increased exponentially as election day approached. This makes sens as American's are typically apathetic towards politics especially when an election is months or years away. The two campaigns were also likely to  have ramped up their efforts to solicit contributions as election day neared. 
+
+### memo_text_
+
+```{r, message=F, warning=F}
+table(data$memo_text)
+```
+This information, while related to the donation, was reported by the committee about a specific contribution and is not included by the donor. Because of this, I think I might drop it from the dataset.
+
+### election_tp
+```{r, message=F, warning=F}
+table(data$election_tp)
+qplot(data$election_tp)
+```
+election_tp tells in which election the donation was made; namely the Primary or General Election which respectively accounted for 45% and 55% of all donations.
+
+
+
+### contbr_occupation
+```{r}
+describe(data$contbr_occupation)
+```
+There are over 6,000 unique occupations - far too many visually look at or to really be helpful
+### What do you know about the relationships between any two variables?
+
+
+```{r}
+data.party <- groupData(data, cand_party)
+group.colors <- c('D'='blue','R'='red','G'='green','L'='yellow')
+ggplot(aes(x=cand_party,y=mean_contb), data=data.party) + geom_bar(stat='identity')
+ggplot(aes(x=cand_party,y=median_contb), data=data.party) + geom_bar(stat='identity')
+ggplot(data,aes(data$elect_delta, color=data$cand_party, alpha=0.8)) + geom_density() + scale_fill_manual(values=group.colors)
+
+
+ggplot(aes(x=cand_party,y=median_contb), data=data.party) + geom_bar(stat='identity')
+ggplot(aes(x=contb_receipt_amt), data=data) + geom_density(aes(color=cand_party)) + xlim(0,1000)
+# DEMS GIVE SMALLER AMOUNTS AND LIBERTARIANS GIVE LARGE AMOUNTS
+ggplot(aes(x=cand_party,y=count), data=data.party) + geom_bar(stat='identity')
+# DEMS HAVE MORE DONORS THAT GIVE SMALLER AMOUNTS
+ggplot(aes(x=cand_party,y=median_pop), data=data.party) + geom_bar(stat='identity')
+# GREEN PARTY DONORS ARE 'MORE LIKELY' TO LIVE IN CITIES W/ LARGER POPS
+ggplot(aes(x=log2(population)), data=data) + geom_density(aes(color=cand_party, alpha=0.3))
+# USE MEDIAN AS POPULATION IS NOT NORMALLY DISTRIBUTED
+ggplot(aes(y=log(contb_receipt_amt),x=1), data=data) + geom_boxplot(aes(fill=cand_party))# GOOD - POSSIBLE FOR FINAL 3 PLOTS
+ggplot(aes(y=log(contb_receipt_amt),x=cand_party), data=data) + geom_violin(aes(fill=cand_party)) #+ ylim(0,5000)
+ggplot(aes(y=as.numeric(population),x=1), data=data) + geom_boxplot(aes(fill=cand_party)) 
+
+ggplot(data,aes(as.Date(contb_receipt_dt),contb_receipt_amt)) + geom_point() + ylim(0, 2000)
+
+ggplot(data,aes(log(population), contb_receipt_amt,color=cand_party)) + geom_point()+ ylim(0, 6000)
+
+qplot(data$contb_bins)
+qplot(data$pop_bins)
+qplot(data$elect_delta_bins)
+ggplot(subset(data,cand_party=='D'|cand_party=='R'),aes(elect_delta_bins, log(contb_receipt_amt))) + geom_boxplot() + facet_wrap(~ cand_party)
+
+ggplot(subset(data,cand_party=='D'|cand_party=='R'),aes(contb_bins, log(population))) + geom_boxplot() + facet_wrap(~ cand_party)
+
+
+
+```
+
+
+### What do you know by analyzing three or more variables?
+
+## Gender, Contribution Amount, Contribution Date, Candidate Party
+```{r}
+
+
+data$contbr_fnm <- sapply(data$contbr_nm, function(name) {
+       f.name <- str_extract(as.character(name),", [[:alpha:]]+($|[[:space:]])")
+       f.name <- str_replace(f.name,", ","")
+       f.name <- str_trim(f.name)
+       return(as.character(f.name))
+    
+  })
+write.csv(data,'~/projects/udacity_DataR/data_gender_pred.csv')
+data$doctor <- sapply(as.character(data$contbr_nm), function(name){
+  if (grepl("DR.",name)) {
+    return("Doctor")
+  }
+  else {
+    return("Not Doctor")
+  }
+})
+
+data$gender<- sapply(as.character(data$contbr_nm), function(name) {
+                  
+                  if(grepl("MRS.",name)){
+                    return("female")
+                  }
+                  else if(grepl("MR.",name)){
+                      return("male")
+                  }
+                  else if(grepl(" MS.",name)){
+                    return("female")
+                  }
+                  else{
+                    return(as.character(NA))
+                  }
+                })
+gender <- subset(data,gender == "male" | gender == "female")
+table(gender[c('gender','cand_party')])
+
+data.gender <- groupData(gender, contb_receipt_amt, gender, cand_party)
+
+
+ggplot(data.gender,aes(gender, median_contb)) + geom_bar(stat='identity') + facet_wrap(~ cand_party) 
+
+
+
+ggplot(data.gender, aes(x=median_elect_delta, y=contb_receipt_amt,color=cand_party)) + geom_point() + facet_wrap(~ gender) 
+
+
+data.gender.predicted <- read.csv('~/projects/udacity_DataR/data_gender_predicted.csv')
+  
+
+data.predicted <- groupData(data.gender.predicted, contb_receipt_amt, predicted_gender, cand_party)
+
+ggplot(data.predicted, aes(x=median_elect_delta, y=median_contb,color=cand_party)) + geom_line() + facet_grid(~ predicted_gender) 
+
+ggplot(data.gender.predicted,aes(contb_receipt_amt,color=cand_party)) + geom_density() + facet_wrap(~ predicted_gender) + xlim(0,1200)
+
+ggplot(data.gender.predicted,aes(elect_delta,contb_receipt_amt,color=cand_party)) + geom_point() + facet_wrap(~ predicted_gender) 
+
+ggplot(data.gender.predicted,aes(log(contb_receipt_amt), color=predicted_gender)) + geom_density() + facet_wrap(~ cand_party)
+
+ggplot(subset(data.gender.predicted,cand_party=='D' | cand_party=='R'),aes(x=1,log(contb_receipt_amt),color=predicted_gender)) + geom_boxplot() + facet_wrap(~ cand_party)
+
+count.by.gender.party <-
+ggplot(as.data.frame(table(data.gender.predicted[c('predicted_gender','cand_party')])),aes(x=cand_party,y=Freq,fill=predicted_gender)) + geom_bar(stat='identity', position=position_dodge())
+
+tmp <- subset(data.gender.predicted, cand_party=='D'| cand_party=='R')
+tmp$cand_party <- as.character(tmp$cand_party)
+
+gender.party.contb_bins <- as.data.frame(table(tmp[c('predicted_gender','cand_party','contb_bins')]))
+ggplot(gender.party.contb_bins,aes(x=cand_party,y=Freq,fill=predicted_gender)) + geom_bar(stat='identity',position=position_dodge()) + facet_grid(~ contb_bins)
+
+ggplot(data.gender.predicted,aes(x=elect_delta, y=contb_receipt_amt, color=predicted_gender)) + geom_point() + facet_wrap(~ cand_party)
+
+ggplot(gender.party.contb_bins,aes(Freq, color=predicted_gender)) + geom_density()  + facet_wrap(~ cand_party)
+
+male <- subset(data.gender.predicted,predicted_gender=='male')
+female <- subset(data.gender.predicted,predicted_gender=='female')
+
+r <- subset(data.gender.predicted, cand_party == 'R')
+d <- subset(data.gender.predicted, cand_party == 'D')
+
+d.gen <- ifelse(d$predicted_gender == "male",1,0)
+r.gen <- ifelse(r$predicted_gender == "male",1,0)
+
+dd <- sample(d.gen, 10000)
+rr <- sample(r.gen, 10000)
+
+cand_party <- ifelse(subset(data, cand_party == 'D' | cand_party == 'R')$cand_party == 'D', 1, 0)
+
+```
+Out of the ~19,000 records where the contributor provided an indication of their gender by using "MS.", "MRS.", or "MR." and where the contribution amount was greater than 0, only 138 contributed to Democratic campaigns. Of these 138, 2 used "MRS." or "MS." and 136 used "MR.". Using the way back machine, I looked at the Obama and Romney donation page on their website - neither seemed to ask for gender nor have a form for the donor to include their salutation. It could be that Democrats are less likely to associate or define themselves by gender or that younger people are less likely to do this (Democrats tend to be younger than Republicans). Regardless of the reason, creating a feature out of this information could be useful in predicting in which party the donor made their contribution. 
+
+
+```{r}
+data.party.elect_delta <- groupData(data,cand_party,elect_delta)
+ggplot(data.party.elect_delta,aes(x=elect_delta, y=count)) + geom_bar(stat='identity',aes(group=cand_party,color=cand_party)) 
+
+ggplot(data.party.elect_delta,aes(x=elect_delta, y=median_contb)) + geom_bar(stat='identity',aes(group=cand_party,color=cand_party)) + ylim(0,5000)# Republicans consistently made higher contributions
+
+ggplot(data,aes(x=log(population),y=contb_receipt_amt, color=cand_party)) + geom_point()
+ggplot(data,aes(x=elect_delta,y=contb_receipt_amt)) + geom_point() + facet_wrap(~ cand_party) #+ ylim(0,5500)
+```
+------
+### gender
+
+
+# Final Plots and Summary
+
+### Plot One
+```{r, message=F, warning=F}
+
+```
+
+### Description One
+
+
+### Plot Two
+```{r, message=F, warning=F}
+
+```
+
+### Description Two
+
+
+### Plot Three
+```{r, message=F, warning=F}
+
+```
+
+------
+
+# Reflection
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+
+
+
+```
+
