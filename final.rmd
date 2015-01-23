@@ -11,6 +11,7 @@ library(cvTools)
 library(pROC)
 require(coefplot)
 library(reshape2)
+library(boot)
 library(plyr)
 library(dplyr)
 library(lubridate)
@@ -384,25 +385,39 @@ train_ind <- sample(seq_len(nrow(glm.data)), size = smp_size)
 train <- glm.data[train_ind, ]
 test <- glm.data[-train_ind, ]
 
-fit <- glm(cand_party ~ log(contb_receipt_amt + 1) + log(estimated_salary+1) + predicted_gender   + cbus + cincy + cleveland   + log(elect_delta + 1) + election_tp +  log(population+1) + multiple_contb, data=train, family="binomial")
-
+fit <- glm(cand_party ~ log(contb_receipt_amt + 1) + log(estimated_salary+1) + predicted_gender   + cbus + cincy + cleveland   + log(elect_delta + 1) + election_tp +  log(population+1) + multiple_contb + included_gender, data=train, family="binomial")
 predpr <- predict(fit, newdata=test,type="response")
-
+test$predicted <- predpr
 coefplot(fit)
-glm.roc <- roc(test$cand_party ~ predpr)
-roc.df <- data.frame(specificities=glm.roc$specificities,sensitivities = glm.roc$sensitivities)
-ggplot(roc.df,aes(specificities, sensitivities)) + geom_line()
-plot(glm.roc)
+
+
+
 ```
 ###Evaluating Performance
-There are different ways to evaluate the performance a logistic regression model. I chose to use two techniques, the receiver operating characterstic (ROC) and cross-validation. 
+There are different ways to evaluate the performance a logistic regression model. I chose to use two techniques, the receiver operating characterstic (ROC) curve and cross-validation. 
 
-####ROC
-ROC is a graphical illustration of the performance of a binary classification system that plots the true positive rate against the false positive rate. While it is possible to provide specific details about the truth and false positive rates, it should suffice to say that we can think of the truth positive rate as correctly classified and the false positive rate as incorrectly classified. Plotting the true positive rate against the false positive rate will show the ROC curve and by calculating the area under this curve (AUC), we are able to evaluate the performance of our model. An AUC of 1 would indicate that our model correctly classified all of the contributors while an AUC of 0 would show the model was unable to correctly classifiy any contributors. 
+####ROC Curve
+A ROC curve is a graphical illustration of the performance of a binary classification system that plots the Sensitivity against the Specificity.
+ - Sensitivity $P(\hat{Y}_i=1 | Y_i=1)$ the proportion of 1s (Democrats, in our case) that are correctly identified or Does the model do a good job of detecting those contributions made to Democrats
+ - Specificity $P(\hat{Y}_i=0 | Y_i=0)$ the proportion of 0s (Republicans) that are correctly identified or Does the model do a good job of detecting those contributions that are not made to Democrats
  
+Our logistic regression model is not predicting if the contribution was made to Democrats or if the contribution was made to Republicans. Instead, it is only predicting if the contribution was made to Democrats. If the model predicts that the contribution was not made to Democrats, then the prediction will be the other choice which is Republicans in our case. 
+While it is possible to provide specific details about the truth and false positive rates, it should suffice to say that we can think of the truth positive rate as correctly classified and the false positive rate as incorrectly classified. Plotting the true positive rate against the false positive rate will show the ROC curve and by calculating the area under this curve (AUC), we are able to evaluate the performance of our model. The more area under the ROC curve indicates greater predictive power: 
+ - auc of 0.5 = no predictive power
+ - auc of 1.0 = perfect predictive power 
+
 ```{r, message=F, warning=F}
-# 10 fold cross validation
-cv.fit <- cv.glm(test, fit, K=10)
+glm.roc <- roc(test$cand_party ~ predpr)
+auc <- round(glm.roc$auc,2)
+roc.df <- data.frame(specificities=glm.roc$specificities,sensitivities = glm.roc$sensitivities)
+ggplot(roc.df,aes(specificities, sensitivities)) + geom_line(aes(), size=1.5) + xlim(1,0) + xlab('Specificity - False Positive Rate') + ylab('Sensitivity - True Positive Rate') + annotate("text",x=.8,y=0.95,label=paste('The Area Under the Curve is ',auc))
+
+ggplot(roc.df,aes(s, sensitivities)) + geom_line(aes(), size=1.5) + xlab('Specificity - False Positive Rate') + ylab('Sensitivity - True Positive Rate') + annotate("text",x=.8,y=0.95,label=paste('The Area Under the Curve is ',auc))
+```
+
+####Cross-validation
+```{r, message=F, warning=F}
+cv.fit <- cv.glm(glm.data, fit, K=10)
 cv.error <- cv.fit$delta
 ```
 
