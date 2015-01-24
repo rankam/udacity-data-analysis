@@ -373,7 +373,7 @@ glm.data <- data[c(11, 19, 20, 21, 22, 26, 28, 29, 30, 31, 32, 33)]
 # this is America, third parties get ignored
 glm.data <- subset(glm.data, cand_party == 'D' | cand_party == 'R') 
 glm.data <- na.omit(glm.data)
-glm.data$cand_party <- ifelse(glm.data$cand_party == 'R', 1, 0)
+glm.data$cand_party <- ifelse(glm.data$cand_party == 'D', 1, 0)
 glm.data$predicted_gender <- ifelse(glm.data$predicted_gender == 'male',1,0)
 glm.data$election_tp <- ifelse(glm.data$election_tp == 'G2012',1,0)
 
@@ -388,10 +388,7 @@ test <- glm.data[-train_ind, ]
 fit <- glm(cand_party ~ log(contb_receipt_amt + 1) + log(estimated_salary+1) + predicted_gender   + cbus + cincy + cleveland   + log(elect_delta + 1) + election_tp +  log(population+1) + multiple_contb + included_gender, data=train, family="binomial")
 predpr <- predict(fit, newdata=test,type="response")
 test$predicted <- predpr
-coefplot(fit)
-
-
-
+coefplot(fit,intercept=FALSE)
 ```
 ###Evaluating Performance
 There are different ways to evaluate the performance a logistic regression model. I chose to use two techniques, the receiver operating characterstic (ROC) curve and cross-validation. 
@@ -408,16 +405,16 @@ While it is possible to provide specific details about the truth and false posit
 
 ```{r, message=F, warning=F}
 glm.roc <- roc(test$cand_party ~ predpr)
+plot(glm.roc)
 auc <- round(glm.roc$auc,2)
 roc.df <- data.frame(specificities=glm.roc$specificities,sensitivities = glm.roc$sensitivities)
-ggplot(roc.df,aes(specificities, sensitivities)) + geom_line(aes(), size=1.5) + xlim(1,0) + xlab('Specificity - False Positive Rate') + ylab('Sensitivity - True Positive Rate') + annotate("text",x=.8,y=0.95,label=paste('The Area Under the Curve is ',auc))
 
-ggplot(roc.df,aes(s, sensitivities)) + geom_line(aes(), size=1.5) + xlab('Specificity - False Positive Rate') + ylab('Sensitivity - True Positive Rate') + annotate("text",x=.8,y=0.95,label=paste('The Area Under the Curve is ',auc))
+ggplot(roc.df,aes(1-specificities, sensitivities)) + geom_line(aes(), size=1.5) + xlab('1 - Specificity (False Positive Rate)') + ylab('Sensitivity (True Positive Rate)') + annotate("text",x=.8,y=0.95,label=paste('The Area Under the Curve is',auc))
 ```
 
 ####Cross-validation
 ```{r, message=F, warning=F}
-cv.fit <- cv.glm(glm.data, fit, K=10)
+cv.fit <- cv.glm(train, fit, K=10)
 cv.error <- cv.fit$delta
 ```
 
