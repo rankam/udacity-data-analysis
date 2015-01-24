@@ -409,7 +409,7 @@ plot(glm.roc)
 auc <- round(glm.roc$auc,2)
 roc.df <- data.frame(specificities=glm.roc$specificities,sensitivities = glm.roc$sensitivities)
 
-ggplot(roc.df,aes(1-specificities, sensitivities)) + geom_line(aes(), size=1.5) + xlab('1 - Specificity (False Positive Rate)') + ylab('Sensitivity (True Positive Rate)') + annotate("text",x=.8,y=0.95,label=paste('The Area Under the Curve is',auc))
+ggplot(roc.df,aes(1-specificities, sensitivities)) + geom_line(aes(), size=1.5) + geom_abline(intercept = 0) + xlab('1 - Specificity (False Positive Rate)') + ylab('Sensitivity (True Positive Rate)') + annotate("text",x=.7,y=0.95,label=paste('The Area Under the Curve is',auc))
 ```
 
 ####Cross-validation
