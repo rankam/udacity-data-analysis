@@ -394,14 +394,20 @@ coefplot(fit,intercept=FALSE)
 There are different ways to evaluate the performance a logistic regression model. I chose to use two techniques, the receiver operating characterstic (ROC) curve and cross-validation. 
 
 ####ROC Curve
-A ROC curve is a graphical illustration of the performance of a binary classification system that plots the Sensitivity against the Specificity.
- - Sensitivity $P(\hat{Y}_i=1 | Y_i=1)$ the proportion of 1s (Democrats, in our case) that are correctly identified or Does the model do a good job of detecting those contributions made to Democrats
- - Specificity $P(\hat{Y}_i=0 | Y_i=0)$ the proportion of 0s (Republicans) that are correctly identified or Does the model do a good job of detecting those contributions that are not made to Democrats
+(http://www.uphs.upenn.edu/radiology/education/resources/documents/Receiver-operator-characteristic-analysis-primer.pdf, http://www.dataschool.io/roc-curves-and-auc-explained/)
+A ROC curve is a graphical illustration of the performance of a binary classification system that plots the True Positive Rate against False Positive Rate.
+ - True Positive Rate $P(\hat{Y}_i=1 | Y_i=1)$ the proportion of 1s (Democrats, in our case) that are correctly identified
+ - False Negative Rate $P(\hat{Y}_i=1 | Y_i=0)$ the proportion of 1s (Democrats) that are incorrectly identified
  
+In our ROC curve, we will see the proportion correctly identified as Democrats plotted against the proportion incorrectly identified as Democrats. 
+ 
+ Does the model do a good job of detecting those contributions made to Democrats
 Our logistic regression model is not predicting if the contribution was made to Democrats or if the contribution was made to Republicans. Instead, it is only predicting if the contribution was made to Democrats. If the model predicts that the contribution was not made to Democrats, then the prediction will be the other choice which is Republicans in our case. (http://stats.stackexchange.com/questions/49469/how-do-i-compute-a-cutoff-based-on-sensitivity-specificity-when-the-characterist)
 While it is possible to provide specific details about the truth and false positive rates, it should suffice to say that we can think of the truth positive rate as correctly classified and the false positive rate as incorrectly classified. Plotting the true positive rate against the false positive rate will show the ROC curve and by calculating the area under this curve (AUC), we are able to evaluate the performance of our model. The more area under the ROC curve indicates greater predictive power: 
  - auc of 0.5 = no predictive power
  - auc of 1.0 = perfect predictive power 
+ 
+ The closer the curve follows the left-hand border and then the top border of the ROC space, the more accurate the test (http://gim.unmc.edu/dxtests/roc2.htm)
 
 ```{r, message=F, warning=F}
 glm.roc <- roc(test$cand_party ~ predpr)
@@ -409,7 +415,7 @@ plot(glm.roc)
 auc <- round(glm.roc$auc,2)
 roc.df <- data.frame(specificities=glm.roc$specificities,sensitivities = glm.roc$sensitivities)
 
-ggplot(roc.df,aes(1-specificities, sensitivities)) + geom_line(aes(), size=1.5) + geom_abline(intercept = 0) + xlab('1 - Specificity (False Positive Rate)') + ylab('Sensitivity (True Positive Rate)') + annotate("text",x=.7,y=0.95,label=paste('The Area Under the Curve is',auc))
+roc.plot <- ggplot(roc.df,aes(1-specificities, sensitivities)) + geom_line(aes(), size=0.5) + geom_abline(intercept = 0) + xlab('False Positive Rate (1 - Specificity)') + ylab('True Positive Rate (Sensitivity)') + annotate("text",x=.7,y=0.95,label=paste('The Area Under the Curve is',auc))
 ```
 
 ####Cross-validation
