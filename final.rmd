@@ -8,6 +8,7 @@ output: html_document
 library(ggplot2)
 library(arm)
 library(cvTools)
+library(ggthemes)
 library(pROC)
 require(coefplot)
 library(reshape2)
@@ -29,7 +30,7 @@ theme_set(theme_minimal(20))
 ```{r, message=F, warning=F}
 groupData <- function(initial_data,...){
 # helper function to make frequent grouping of data with diffrent variables easier
-gp_data <-group_by(na.omit(initial_data),...)
+gp_data <-group_by(initial_data,...)
 gps_data<-summarise(gp_data, 
                   mean_contb = mean(contb_receipt_amt),
                   median_contb = median(contb_receipt_amt),
@@ -267,13 +268,13 @@ ggplot(data, aes(cand_party)) + geom_bar()
 describe(data$cand_party)
 ```
 
-# Gender of Contributor
+# Predicted Gender of Contributor
 ```{r, echo=FALSE}
-table(data$gender)
+table(data$predicted_gender)
 ```
 # Contributor Included their Gender when Contributing
 ```{r, echo=FALSE}
-table(data[c('included_gender', cand_party)])
+table(data[c('included_gender')])
 ```
 
 Out of the ~19,000 records where the contributor provided an indication of their gender by using "MS.", "MRS.", or "MR." and where the contribution amount was greater than 0, only 138 contributed to Democratic campaigns. Of these 138, 2 used "MRS." or "MS." and 136 used "MR.". Using the way back machine, I looked at the Obama and Romney donation page on their website - neither seemed to ask for gender nor have a form for the donor to include their salutation. It could be that Democrats are less likely to associate or define themselves by gender or that younger people are less likely to do this (Democrats tend to be younger than Republicans). Regardless of the reason, creating a feature out of this information could be useful in predicting in which party the donor made their contribution. 
@@ -313,6 +314,16 @@ ggplot(aes(x=cand_party,y=count), data=data.party) + geom_bar(stat='identity')
 ggplot(aes(x=cand_party,y=median_pop), data=data.party) + geom_bar(stat='identity')
 
 ggplot(aes(y=log(contb_receipt_amt),x=1), data=data) + geom_boxplot(aes(fill=cand_party))
+
+data.cand_party.elect_delta <- groupData(data, elect_delta,cand_party)
+
+ggplot(data.cand_party.elect_delta, aes(elect_delta, sqrt(sum_contb), color=cand_party)) + geom_point() 
+
+ggplot(data.cand_party.elect_delta, aes(elect_delta, median_contb, color=cand_party)) + geom_point()
+
+data.cand_party.include_gender <- groupData(data, included_gender,cand_party)
+
+ggplot(data.cand_party.include_gender,aes(included_gender,count)) + geom_bar(stat='identity') + facet_wrap(~ cand_party)                                                                                                            
 ```
 
 Democrats received a greater number of contributions in small amounts while Republicans received higher contribution amounts from fewer contributors.
@@ -323,8 +334,8 @@ data$zip <- clean.zipcodes(data$contbr_zip)
 oh <- subset(zipcode, state=='OH') # zipcode package would change my zipcode in 'data' variable to zip codes in MA for some reason. Subsetting only Ohio values from zipcode seemed to solve this issue
 map.data <- merge(subset(data, contb_receipt_amt > 0), oh, by.x='contbr_zip', by.y='zip')
 
-map.plot <- ggplot(data=subset(map.data,cand_party == 'D' | cand_party == 'R'),aes(x=longitude, y=latitude, color=cand_party, size = contb_receipt_amt)) + geom_point(position = position_jitter(w=.08,h=.08)) + scale_size_continuous(breaks = c(50,100,500,1000,2500,5000,10000),range=c(1,15)) + labs(x=NULL, y=NULL)
-map.plot <- map.plot + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.ticks=element_blank(),axis.text.x=element_blank(),axis.text.y=element_blank())
+map.plot <- ggplot(data=subset(map.data,cand_party == 'D' | cand_party == 'R'),aes(x=longitude, y=latitude, color=cand_party, size = contb_receipt_amt)) + geom_point(position = position_jitter(w=.08,h=.08)) + scale_size_continuous(breaks = c(50,100,500,1000,2500,5000,10000),range=c(1,15), name='Contribution Amount') + labs(x=NULL, y=NULL, color='Candidate Party') + scale_color_tableau()
+map.plot <- map.plot + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.ticks=element_blank(),axis.text.x=element_blank(),axis.text.y=element_blank()) 
 map.plot
 ```
 
@@ -416,6 +427,7 @@ auc <- round(glm.roc$auc,2)
 roc.df <- data.frame(specificities=glm.roc$specificities,sensitivities = glm.roc$sensitivities)
 
 roc.plot <- ggplot(roc.df,aes(1-specificities, sensitivities)) + geom_line(aes(), size=0.5) + geom_abline(intercept = 0) + xlab('False Positive Rate (1 - Specificity)') + ylab('True Positive Rate (Sensitivity)') + annotate("text",x=.7,y=0.95,label=paste('The Area Under the Curve is',auc))
+roc.plot
 ```
 
 ####Cross-validation
