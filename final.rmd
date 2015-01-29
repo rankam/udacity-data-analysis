@@ -299,10 +299,103 @@ TRAN_ID
 This information, while related to the donation, was reported by the committee about a specific contribution and is not included by the donor. Because of this, I will drop it from the dataset.
 See http://webcache.googleusercontent.com/search?q=cache:eE9YB7REtkEJ:ftp://ftp.fec.gov/FEC/Presidential_Map/2012/DATA_DICTIONARIES/CONTRIBUTOR_FORMAT.txt+&cd=2&hl=en&ct=clnk&gl=us for further information regarding variables.
 
+###Do Democrats or Republicans Receive Higher Donation Amounts?
+```{r, message=F, warning=F}
+data <- subset(data, cand_party == 'D' | cand_party == 'R' )
+data.by.party <- groupData(data,cand_party)
+ggplot(subset(data, cand_party == 'D' | cand_party == 'R'),aes(1, log(contb_receipt_amt+1))) + geom_boxplot(aes(fill=cand_party))
+
+mann.fit<-wilcox.test(subset(data, cand_party == 'R')$contb_receipt_amt, subset(data, cand_party == 'D')$contb_receipt_amt)
+```
+Looking at the boxplot, it appears that contributions to Republicans are of a higher amount than those made to Democrats. To help confirm my visual assumptions, I performed a Mann-Whitney U Test which is a nonparametric test for comparing two populations. The question the Mann-Whitney U Test was answering is:
+  - Do the two populations (Contributions made to Republicans and contributions made to Democrats) have identical distributions?
+Looking at the results of the test, I see a p-value < 2.2e-16 so I can conclude that the there is a statistically significant difference between the two populations. Thus, I can answer my question - Contributions made to Republicans do appear to higher than those made to Democrats.
+
+
+###Do Democrats or Republicans Receive More Donations?
+```{r, message=F, warning=F}
+qplot(data$cand_party, geom='bar')
+table(data$cand_party)
+```
+Democrats received nearly 3 times more donations than Republicans. 
+
+
+###Who Donates More - Men or Women?
+```{r, message=F, warning=F}
+qplot(data$predicted_gender, data$contb_receipt_amt, geom='bar', stat='identity')
+ggplot(data, aes(predicted_gender, contb_receipt_amt)) + geom_bar(stat='identity') + facet_wrap(~cand_party)
+ggplot(data, aes(1, log(contb_receipt_amt), fill=predicted_gender)) + geom_boxplot() + facet_grid(~cand_party)
+```
+
+###Who Donates More Frequently - Men or Women?
+```{r, message=F, warning=F}
+qplot(data$predicted_gender, geom='bar')
+ggplot(data, aes(x=predicted_gender)) + geom_bar() + facet_wrap(~cand_party)
+```
+
+
+###Do people with higher estimated salaries donate more than those with lower estimated salaries?
+```{r, message=F, warning=F}
+ggplot(data, aes(estimated_salary, contb_receipt_amt)) + geom_point() + xlim(0,quantile(data$estimated_salary, .95)) + ylim(0, quantile(data$contb_receipt_amt, .95)) + geom_smooth(method='loess')
+
+
+```
+
+###Do people with higher estimated salaries donate to Ds or Rs?
+```{r, message=F, warning=F}
+data <- subset(data,cand_party=='D' | cand_party == 'R')
+ggplot(data, aes(estimated_salary)) + geom_histogram() + facet_wrap(~ cand_party) 
+ggplot(subset(data,cand_party=='D' | cand_party == 'R'), aes(1,log(estimated_salary+10))) + geom_boxplot(aes(fill=cand_party))
+```
+This histogram reveals distributions similar to what I expected - salaries in the United States often follow a an exponential or log-normal distribution though it does not give a clear indication if there is a relationship between estimated salary and which political party one conbtributes to. The boxplot appears to show that people with higher salaries give to Republicans, but it's far from conclusive. 
+
+###Do people donate more when it is closer to the election?
+```{r, message=F, warning=F}
+data.elect <- data.frame(groupData(subset(data,cand_party=='D' | cand_party == 'R'), elect_delta,cand_party))
+ggplot(data.elect, aes(elect_delta, median_contb)) + geom_line() + facet_grid(~cand_party) + geom_smooth()
+
+ggplot(data,aes(elect_delta, contb_receipt_amt)) + geom_point(alpha = .1, position= position_jitter(), color="red") + coord_trans(y = "sqrt") + geom_line(stat = "summary", fun.y = median) + ylim(0,quantile(data$contb_receipt_amt, 0.95)) 
+```
+
+###Do people donate more frequently when it is closer to the election?
+```{r, message=F, warning=F}
+ggplot(data,aes(elect_delta)) + geom_histogram(aes(fill=cand_party))
+```
+
+
+###Do people that include their gender donate to D or R?
+```{r, message=F, warning=F}
+table(data[c('cand_party', 'included_gender')])
+```
+
+###Do people that live in cities donate more or less?
+```{r, message=F, warning=F}
+ggplot(data, aes(1,log(contb_receipt_amt+10))) + geom_boxplot() + facet_wrap(~ popbins) + ylim(quantile(log(data$contb_receipt_amt+10), .05),quantile(log(data$contb_receipt_amt+10), .95))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ```{r, message=F, warning=F}
-data.party <- groupData(data, cand_party)
-ggplot(aes(x=cand_party,y=mean_contb), data=data.party) + geom_bar(stat='identity')
+data.party.city <- groupData(data, cand_party, contbr_city)
+
+
+data.party.elect <- groupData(data, cand_party,elect_delta)
+
+ggplot(aes(x=elect_delta,y=mean_contb), data=data.party.elect) + geom_point(aes(color=cand_party)) + scale_x_discrete(breaks = seq(0, 648, 30))
+
+ggplot(aes(x=elect_delta/7,y=mean_contb), data=data.party.elect) + geom_line(aes(color=cand_party))
 ggplot(aes(x=cand_party,y=median_contb), data=data.party) + geom_bar(stat='identity')
 ggplot(data,aes(data$elect_delta, color=data$cand_party)) + geom_density() 
 ggplot(data,aes(log(elect_delta +1), color=cand_party)) + geom_density() 

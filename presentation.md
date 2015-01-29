@@ -44,3 +44,41 @@
 	- explain cross validation
 	- include "this is read" for any mathematical notation
 		- e.g. "read the probability of y occurring given that x has occurred is equal to some constant number,alpha, plus some number, beta, times x"
+
+
+#Timeline
+- What did democratic & republican contributions look like at [19 - 13] months & [13 - 7] months of the election?
+	- Volume of contributions
+	- Sum of contributions
+	- Median Contribution
+	- Single day high for total contributions and volume of contributions
+	- Single day low for total contributions and volume of contributions
+	- Break down of female contributions
+	- Break down of male contributions
+		- Did the volume of contributions increase from the previous period to this one? (Use statistical test)
+		- Did the sum of contributions increase from the previous period to this one? (Use statistical test)?
+		- Did the gender of contributors change (i.e more men than women ) change from the previous period to this one? (Use statistical test)?
+- What did democratic & republican contributions look like for at [7-5] & [5-3] months?
+	- Volume of contributions
+	- Sum of contributions
+	- Median Contribution
+	- Single day high for total contributions and volume of contributions
+	- Single day low for total contributions and volume of contributions
+- What did democratic & republican contributions look like for [3-2] & [2-1] months?
+	- Volume of contributions
+	- Sum of contributions
+	- Median Contribution
+	- Single day high for total contributions and volume of contributions
+	- Single day low for total contributions and volume of contributions
+- What did democratic & republican contributions look like for [4-3],[3-2],[2-1],[1-0] weeks?
+	- Volume of contributions
+	- Sum of contributions
+	- Median Contribution
+	- Single day high for total contributions and volume of contributions
+	- Single day low for total contributions and volume of contributions
+
+
+
+# Functions Necessary
+- group by month
+	- group by 
