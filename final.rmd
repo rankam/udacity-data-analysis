@@ -393,8 +393,7 @@ data.party.city <- groupData(data, cand_party, contbr_city)
 
 data.party.elect <- groupData(data, cand_party,elect_delta)
 
-ggplot(aes(x=elect_delta,y=mean_contb), data=data.party.elect) + geom_point(aes(color=cand_party)) + scale_x_discrete(breaks = seq(0, 648, 30))
-
+ggplot(aes(x=elect_delta,y=mean_contb), data=data.party.elect) + geom_point(aes(color=cand_party)) + scale_x_discrete(breaks = seq(0, 648, 30)) + geom_smooth(method='loess') + facet_wrap(~ cand_party)
 ggplot(aes(x=elect_delta/7,y=mean_contb), data=data.party.elect) + geom_line(aes(color=cand_party))
 ggplot(aes(x=cand_party,y=median_contb), data=data.party) + geom_bar(stat='identity')
 ggplot(data,aes(data$elect_delta, color=data$cand_party)) + geom_density() 
