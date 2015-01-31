@@ -1,0 +1,327 @@
+TITLE by YOUR_NAME_HERE
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+require(ggplot2)
+require(arm)
+require(cvTools)
+require(ggthemes)
+require(pROC)
+require(coefplot)
+require(reshape2)
+require(boot)
+require(plyr)
+require(dplyr)
+require(lubridate)
+require(glmnet)
+require(Hmisc)
+require(jsonlite)
+require(zoo)
+require(scales)
+require(stringr)
+require(zipcode)
+```
+
+```{r echo=FALSE, Load_the_Data}
+data <- read.csv('~/projects/udacity_DataR/P00000001-OH.csv', sep=',',row.names=NULL,stringsAsFactors = FALSE)
+# The dataset had each column name shifted to the right one place with an additional column at the end filled with NAs. 
+colnames(data)[1:18] <- colnames(data)[2:19] 
+data <- data[1:18]
+dim(data)
+names(data)
+str(data)
+```
+The data contains 19 features which makes it difficult to understand. Ideally, I would like to reduce the number of features to no more than 10. However, what I can tell is that the majority of the conbributions were made to Barack Obama (71%) and Mitt Romney (22%) with the other 12 candidates splitting the remaining 7% of contributions. I can also see that the candidate's party is not included the dataset - it will be necessary to add this information as it is vital to answering the question in which I'm interested - To which party was the contribution made?
+
+###Feature Creation and Addition
+```{r echo=FALSE, Additional_Features}
+# Census data for Ohio
+pops <- fromJSON('~/projects/udacity_DataR/ohio_city_populations.json') 
+
+# Add Population of the Contributor's City
+getPopulation <- function(data){
+  sapply(data$contbr_city,function(x) { 
+    ifelse(x %in% names(pops),as.numeric(pops[as.character(x)]),NA)
+  }) 
+}
+data$population <- getPopulation(data)
+
+# Create a feature describing how many days from the election the contribution was made
+getElectDelta <- function(data){
+  data$contb_receipt_dt <- as.Date(data$contb_receipt_dt, "%d-%b-%y")
+  election_day <- as.Date("2012-11-06")
+  sapply(data$contb_receipt_dt,function(x) {
+    return(election_day - x)
+    })
+}
+data$elect_delta <- getElectDelta(data)
+
+# Identify the Party of each Candidate
+getCandParty <- function(data) {
+  cand_party = list()    
+  for (cand in unique(data$cand_nm)) {
+    if (cand == 'Obama, Barack') {
+      cand_party['Obama, Barack'] <- 'D'
+    }     
+    else if (cand == 'Stein, Jill') {
+      cand_party['Stein, Jill'] <- 'G'
+    } 
+    else if (cand == 'Johnson, Gary Earl') {
+      cand_party['Johnson, Gary Earl'] <- 'L'
+    } 
+    else {
+      cand_party[as.character(cand)] <- 'R'
+    }
+  }
+  sapply(as.character(data$cand_nm), function(x) {
+    as.character(cand_party[x])
+    })
+}
+data$cand_party <- getCandParty(data)
+
+# Zip codes should be strings
+data$contbr_zip <- substr(as.character(data$contbr_zip),1,5)
+
+# I'm not concerned with negative donations - I'm not really sure what they mean
+data <- subset(data,contb_receipt_amt >0)
+
+
+# making an assumption that if the contributor's name, city, and employer show up more than once, it is the same person
+# this would indicate that they made multiple contributions
+getMultipleContb <- function(data){
+  rows <- paste(data$contbr_nm, data$contbr_city, data$contbr_employer, sep=" ")  
+  ifelse(duplicated(rows) == TRUE, 1, 0)
+}
+
+data$multiple_contb <- getMultipleContb(data)
+
+write.csv(data,'~/projects/udacity_DataR/data_gender_pred.csv')
+```
+
+####Predicting Salaries
+Trying to use all of the information provided in the original file and thinking that a person's salary could have predictive power, I wrote a web scraping script, get_estimated_salaries.py, in Python that gets salary information for different occupations. Indeed.com allows you to enter an occupation and zip code and returns an average salary. 
+
+####Predicting Gender
+I need to predict the gender of the contributors that did not include MR., MRS., or MS. I attempted to use the gender package in R, but it was very slow (it never completed the task, but it had been over 8 hours when I finally stopped it). As such, I decided to use Python's NLTK library for the task and created a script called classify_gender.py. Running classify_gender.py creates a new csv file (data_gender_predicted.csv) with predicted gender names and prints "You classified 0.7704 correct on the test set" to stdout. After running both python scripts, I loaded the results back into R.
+
+```{r echo=FALSE, Predicting_Gender}
+# Reload the data after running the python scripts
+data <- read.csv('~/projects/udacity_DataR/data_w_salary_gender.csv',stringsAsFactors = FALSE)
+
+# predicted_gender is a better variable name
+data$predicted_gender <- data$gender 
+
+# check to see if the contributor identified their gender in their name
+getGender <- function(data){
+  sapply(as.character(data), function(name) {
+    
+    if(grepl("MRS.",name)){
+      return("female")
+    }
+    else if(grepl("MR.",name)){
+        return("male")
+    }
+    else if(grepl(" MS.",name)){
+      return("female")
+    }
+    else{
+      return(as.character(NA))
+    }
+    })  
+}
+
+data$gender <- getGender(data$contbr_nm)
+
+# create a feature based on if the contributor included MR. MRS., or MS. in their name
+data$included_gender <- ifelse(is.na(data$gender), 0, 1)
+
+# use predicted gender for those contributos that did not include MR., MRS., MS. in their contribution
+getGender <- function(data){
+  sapply(1:length(data), function(i){
+      if (is.na(data[i])){
+        data$predicted_gender[i]  
+      }
+      else{
+        data$gender[i]
+      }
+     
+    })  
+}
+data$predicted_gender <- getGender(data$gender)
+
+
+# Adds binary feature if the contributor's zip code is within a city
+# Zip codes are used because I wanted to include the surrounding areas
+add_city <- function(city){
+   sapply(data$contbr_zip, function(zip){
+    if (substring(as.character(zip),1,5) %in% city){
+      1
+    }
+    else{
+      0
+    }
+    })
+}
+
+# http://www.city-data.com allowed me to search for zipcodes in specific cities
+cbus <- as.character(c(43002, 43004, 43016, 43017, 43026, 43035, 43054, 43065, 43081, 43082, 43085, 43119, 43123, 43137, 43147, 43201, 43202, 43203, 43204, 43205, 43206, 43207, 43210, 43211, 43212, 43213, 43214, 43215, 43217, 43219, 43220, 43221, 43222, 43223, 43224, 43227, 43228, 43229, 43230, 43231, 43235, 43240))
+cleveland <- as.character(c(44101, 44103, 44104, 44105, 44106, 44107, 44111, 44112, 44113, 44114, 44115, 44117, 44119, 44120, 44121, 44125, 44127, 44134))
+cincy <- as.character(c(45202, 45203, 45204, 45205, 45206, 45207, 45208, 45209, 45212, 45214, 45216, 45217, 45219, 45220, 45223, 45224, 45225, 45226, 45227, 45229, 45230, 45231, 45232, 45239, 45243))
+data$cincy <- add_city(cincy)
+data$cbus <- add_city(cbus)
+data$cleveland <- add_city(cleveland)
+
+# drop rows without an estimated salary
+data <- subset(data, estimated_salary!= 'No Data ') 
+
+# estimated salary was a string
+data$estimated_salary <- as.numeric(data$estimated_salary)
+```
+
+# Univariate Plots Section
+```{r echo=FALSE, Univariate_Plots}
+# Contribution Amount
+contb.quantile <- quantile(data$contb_receipt_amt, .95)
+ggplot(aes(data$contb_receipt_amt), data=data) + geom_density() + xlim(0,contb.quantile)
+ggplot(aes(log(data$contb_receipt_amt)), data=data) + geom_histogram()  + scale_x_discrete(limits = c(0:round(log(contb.quantile))))
+```
+The contribution amount is not normally distributed and is multi-modal. It appears that the most frequent contribution amounts were less than or equal to $100 with a $100 donation being the most frequent. One can also see that the data contains peaks at specific values such as 100, 250, and 500 - this aspec of data the gives it the feeling of being discrete. 
+
+```{r echo=FALSE, Univariate_Plots}
+# Contribution Amount
+table(data$election_tp)
+```
+election_tp tells in which election the donation was made; namely the Primary or General Election which respectively accounted for 45% and 55% of all donations.
+
+
+
+```{r, echo=FALSE}
+# Contributor's Employer
+describe(data$contbr_occupation)
+describe(data$contbr_employer)
+```
+There are over 6,000 unique occupations and 11,000 unique employers - far too many visually look at. 
+
+```{r, echo=FALSE}
+# population
+ggplot(aes(log(population + 1)), data=data) + geom_histogram()  + xlim(quantile(log(data$population), 0),quantile(log(data$population), .95))
+summary(data$population)
+```
+
+
+```{r, echo=FALSE}
+# Number of Days from the General Election the Contribution was Made
+qplot(data$elect_delta)
+```
+
+elect_delta follows the log-normal distribution. This makes sense as American's are typically apathetic towards politics especially when an election is months or years away. The two campaigns were also likely to  have ramped up their efforts to solicit contributions as election day neared. 
+
+# Candidate's Party
+```{r, echo=FALSE}
+qplot(data$cand_party)
+describe(data$cand_party)
+```
+
+Democratic candidates received 72% of donations as opposed to the Republicans 28%. This is interesting because Ohio is typically considered a battle ground state meaning that the voting population is equally split between the two parties. 
+
+# Predicted Gender of Contributor
+```{r, echo=FALSE}
+table(data$predicted_gender)
+table(data[c('included_gender')])
+```
+Out of the over 100,000 records, only about 15,000 records exist where the contributor provided an indication of their gender by using "MS.", "MRS.", or "MR.". Using the way back machine, I looked at the Obama and Romney donation page on their website - neither seemed to ask for gender nor have a form for the donor to identify their gender.
+
+
+```{r, echo=FALSE}
+# Contributor's Estimated Salary
+qplot(data$estimated_salary) + xlim(0,quantile(data$estimated_salary, .95))
+qplot(data$estimated_salary^(1/3) ) +  xlim(0,quantile(data$estimated_salary^(1/3), .95))
+```
+
+
+# Multiple Contributions
+```{r, echo=FALSE}
+table(data$multiple_contb)
+```
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+
+### What is/are the main feature(s) of interest in your dataset?
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+
+### Did you create any new variables from existing variables in the dataset?
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+
+
+# Bivariate Plots Section
+```{r echo=FALSE, Bivariate_Plots}
+
+
+
+data.by.party <- groupData(data,cand_party)
+ggplot(data,aes(cand_party, log(contb_receipt_amt+1))) + geom_boxplot()
+
+
+ggplot(data,aes(elect_delta)) + geom_histogram() + facet_wrap(~ cand_party)
+```
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+
+### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+
+### What was the strongest relationship you found?
+
+
+
+
+# Multivariate Plots Section
+
+```{r echo=FALSE, Multivariate_Plots}
+ggplot(data,aes(elect_delta)) + geom_histogram(aes(fill=election_tp)) + facet_wrap(~ cand_party)
+```
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
+
+### Were there any interesting or surprising interactions between features?
+
+### OPTIONAL: Did you create any models with your dataset? Discuss the strengths and limitations of your model.
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo=FALSE, Plot_One}
+
+```
+
+### Description One
+
+
+### Plot Two
+```{r echo=FALSE, Plot_Two}
+
+```
+
+### Description Two
+
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+
+```
+
+### Description Three
+
+------
+
+# Reflection

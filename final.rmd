@@ -71,33 +71,49 @@ The data contains 19 features which makes it difficult to understand. Ideally, I
 ###Add Population of the Contributor's City
 ```{r, message=F, warning=F}
 pops <- fromJSON('~/projects/udacity_DataR/ohio_city_populations.json') # census data
-data$population <- sapply(data$contbr_city,function(x) { 
-  ifelse(x %in% names(pops),return(pops[as.character(x)]),return(NA))
+
+getPopulation <- function(data){
+  sapply(data$contbr_city,function(x) { 
+    ifelse(x %in% names(pops),as.numeric(pops[as.character(x)]),NA)
   }) 
-data$population <- as.numeric(data$population) 
+}
+data$population <- getPopulation(data)
 ```
 ###Create a Feature Describing how many days from the Election the Contribution was Made
 ```{r, message=F, warning=F}
-data$contb_receipt_dt <- as.Date(data$contb_receipt_dt, "%d-%b-%y")
-election_day <- as.Date("2012-11-06")
-data$elect_delta <- sapply(data$contb_receipt_dt,function(x) {return(election_day - x)}) # days from general election day
+# Gets days from general election day
+getElectDelta <- function(data){
+  data$contb_receipt_dt <- as.Date(data$contb_receipt_dt, "%d-%b-%y")
+  election_day <- as.Date("2012-11-06")
+  sapply(data$contb_receipt_dt,function(x) {
+    return(election_day - x)
+    })
+}
+data$elect_delta <- getElectDelta(data)
+ 
 ```
 ###Identify the Party of each Candidate
 ```{r, message=F, warning=F}
-cand_party = list()    
-for (cand in unique(data$cand_nm)){
-   if(cand == 'Obama, Barack'){
-    cand_party['Obama, Barack'] <- 'D'
-  }     
-  else if(cand == 'Stein, Jill'){
-    cand_party['Stein, Jill'] <- 'G'
-  } else if(cand == 'Johnson, Gary Earl'){
-    cand_party['Johnson, Gary Earl'] <- 'L'
-  } else{
-    cand_party[as.character(cand)] <- 'R'
+getCandParty <- function(data){
+  cand_party = list()    
+  for (cand in unique(data$cand_nm)){
+     if(cand == 'Obama, Barack'){
+      cand_party['Obama, Barack'] <- 'D'
+    }     
+    else if(cand == 'Stein, Jill'){
+      cand_party['Stein, Jill'] <- 'G'
+    } else if(cand == 'Johnson, Gary Earl'){
+      cand_party['Johnson, Gary Earl'] <- 'L'
+    } else{
+      cand_party[as.character(cand)] <- 'R'
+    }
   }
+  sapply(as.character(data$cand_nm), function(x) {
+    as.character(cand_party[x])
+    })
 }
-data$cand_party <- sapply(as.character(data$cand_nm), function(x) {as.character(cand_party[x])})
+
+data$cand_party <- getCandParty(data)
 ```
 
 ###Additional Cleaning
@@ -117,7 +133,7 @@ There are 100k+ rows and it's exploratory analysis so I'm going to just going to
 ###Predicting Gender
 ```{r, message=F, warning=F}
 # Extract first name necessary to predict gender
-extractFirstName <- function(data){
+getFirstName <- function(data){
   sapply(data, function(name) {
          f.name <- str_extract(as.character(name),", [[:alpha:]]+($|[[:space:]])")
          f.name <- str_replace(f.name,", ","")
@@ -126,7 +142,7 @@ extractFirstName <- function(data){
     })  
 }
 
-data$contbr_fnm <- extractFirstName(data$contbr_nm)
+data$contbr_fnm <- getFirstName(data$contbr_nm)
 # data$contbr_fnm <- sapply(data$contbr_nm, function(name) {
 #        f.name <- str_extract(as.character(name),", [[:alpha:]]+($|[[:space:]])")
 #        f.name <- str_replace(f.name,", ","")
@@ -183,7 +199,7 @@ data$gender <- getGender(data$contbr_nm)
 data$included_gender <- ifelse(is.na(data$gender), 0, 1)
 
 # use predicted gender for those contributos that did not include MR., MRS., MS. in their contribution
-getFinalGender <- function(data){
+getGender <- function(data){
   sapply(1:length(data), function(i){
       if (is.na(data[i])){
         data$predicted_gender[i]  
@@ -194,7 +210,7 @@ getFinalGender <- function(data){
      
     })  
 }
-data$predicted_gender <- getFinalGender(data$gender)
+data$predicted_gender <- getGender(data$gender)
 # final_gender <- sapply(1:length(data$gender), function(i){
 #     if (is.na(data$gender[i])){
 #       data$predicted_gender[i]  
@@ -214,8 +230,29 @@ data$predicted_gender <- getFinalGender(data$gender)
 ```{r, message=F, warning=F}
 # making an assumption that if the contributor's name, city, and employer show up more than once, it is the same person
 # this would indicate that they made multiple contributions
-rows <- paste(data$contbr_nm, data$contbr_city, data$contbr_employer, sep=" ")
-data$multiple_contb <- ifelse(duplicated(rows) == TRUE, 1, 0)
+getMultipleContb <- function(data){
+  rows <- paste(data$contbr_nm, data$contbr_city, data$contbr_employer, sep=" ")  
+  ifelse(duplicated(rows) == TRUE, 1, 0)
+}
+t <- list()
+for ( x in rows) {
+  if (x %in% names(t)) {
+    t[x] <- as.numeric(t[x]) + 1
+    }
+  else {
+    t[x] <- 1
+    }
+  }
+test <- sapply(1:length(rows), function(i) {
+  if (t[rows[i]] > 1) {
+    return(1) 
+  } 
+  else {
+    return(0)
+    }
+  })
+data$multiple_contb <- test
+data$multiple_contb <- getMultipleContb(data)
 
 # http://www.city-data.com/ allowed me to search for zipcodes in specific cities
 cbus <- as.character(c(43002, 43004, 43016, 43017, 43026, 43035, 43054, 43065, 43081, 43082, 43085, 43119, 43123, 43137, 43147, 43201, 43202, 43203, 43204, 43205, 43206, 43207, 43210, 43211, 43212, 43213, 43214, 43215, 43217, 43219, 43220, 43221, 43222, 43223, 43224, 43227, 43228, 43229, 43230, 43231, 43235, 43240))
@@ -239,15 +276,18 @@ data$estimated_salary <- as.numeric(data$estimated_salary)
 
 # Contribution Amount
 ```{r, echo=FALSE}
-ggplot(aes(data$contb_receipt_amt), data=data) + geom_density() + xlim(-100,1000)
-ggplot(aes(log(data$contb_receipt_amt)), data=data) + geom_density()
+# USING
+contb.quantile <- quantile(data$contb_receipt_amt, .95)
+ggplot(aes(data$contb_receipt_amt), data=data) + geom_density() + xlim(0,contb.quantile)
+ggplot(aes(log(data$contb_receipt_amt)), data=data) + geom_histogram()  + scale_x_discrete(limits = c(0:round(log(contb.quantile))))
 ```
-The contribution amount is not normally distributed and is multi-modal. It appears that the most frequent contribution amounts were less than or equal to $100 with a $100 donation being the most frequent. One can also see that the data contains peaks at specific values such as 100, 250, 500, 1,000 - I can infer that this is a result of campaigns explicity asking for specific amounts (e.g. they ask for donations of $500, $1000, $1500 but do not ask for $400 or $900). 
+The contribution amount is not normally distributed and is multi-modal. It appears that the most frequent contribution amounts were less than or equal to $100 with a $100 donation being the most frequent. One can also see that the data contains peaks at specific values such as 100, 250, and 500 - this aspec of data the gives it the feeling of being discrete. 
 
 
 
 # Election Type
 ```{r, echo=FALSE}
+# using
 table(data$election_tp)
 ggplot(data,aes(election_tp)) + geom_bar()
 ```
@@ -261,9 +301,10 @@ There are over 6,000 unique occupations - far too many visually look at.
 
 # Contributor's Employer
 ```{r, echo=FALSE}
+describe(data$contbr_occupation)
 describe(data$contbr_employer)
 ```
-There are over 11,000 unique employers - far too many visually look at. 
+There are over 6,000 unique occupations and 11,000 unique employers - far too many visually look at. 
 
 # Contributor's City
 ```{r, echo=FALSE}
@@ -287,8 +328,8 @@ describe(data$contbr_nm)
 
 # Population of Contributor's City
 ```{r, echo=FALSE}
-ggplot(aes(data$population), data=data) + geom_density() + scale_x_continuous(labels = comma) 
-ggplot(aes(log(population + 1)), data=data) + geom_density() + scale_x_continuous(labels = comma) 
+ggplot(aes(data$population), data=data) + geom_histogram() + xlim(0,quantile(data$population, .95))
+ggplot(aes(log(population + 1)), data=data) + geom_histogram()  + xlim(quantile(log(data$population), 0),quantile(log(data$population), .95))
 summary(data$population)
 ```
 The population data is multi-modal. The majority of contributors live in a city with a population less than 100,000. 
@@ -302,7 +343,7 @@ elect_delta follows the log-normal distribution. This makes sense as American's 
 
 # Candidate's Party
 ```{r, echo=FALSE}
-ggplot(data, aes(cand_party)) + geom_bar()
+qplot(data$cand_party)
 describe(data$cand_party)
 ```
 
@@ -313,14 +354,15 @@ table(data$predicted_gender)
 # Contributor Included their Gender when Contributing
 ```{r, echo=FALSE}
 table(data[c('included_gender')])
+qplot(data$elect_delta, fill=data$election_tp) #ELECTION TYPE
 ```
 
 Out of the ~19,000 records where the contributor provided an indication of their gender by using "MS.", "MRS.", or "MR." and where the contribution amount was greater than 0, only 138 contributed to Democratic campaigns. Of these 138, 2 used "MRS." or "MS." and 136 used "MR.". Using the way back machine, I looked at the Obama and Romney donation page on their website - neither seemed to ask for gender nor have a form for the donor to include their salutation. It could be that Democrats are less likely to associate or define themselves by gender or that younger people are less likely to do this (Democrats tend to be younger than Republicans). Regardless of the reason, creating a feature out of this information could be useful in predicting in which party the donor made their contribution. 
 
 # Contributor's Estimated Salary
 ```{r, echo=FALSE}
-qplot(data$estimated_salary, geom='density')
-qplot(log(data$estimated_salary + 1), geom='density')
+qplot(data$estimated_salary) + xlim(0,quantile(data$estimated_salary, .95))
+qplot(data$estimated_salary^(1/3) ) +  xlim(0,quantile(data$estimated_salary^(1/3), .95))
 ```
 # Multiple Contributions
 ```{r, echo=FALSE}
@@ -341,7 +383,7 @@ See http://webcache.googleusercontent.com/search?q=cache:eE9YB7REtkEJ:ftp://ftp.
 ```{r, message=F, warning=F}
 data <- subset(data, cand_party == 'D' | cand_party == 'R' )
 data.by.party <- groupData(data,cand_party)
-ggplot(subset(data, cand_party == 'D' | cand_party == 'R'),aes(1, log(contb_receipt_amt+1))) + geom_boxplot(aes(fill=cand_party))
+ggplot(data,aes(1, log(contb_receipt_amt+1))) + geom_boxplot(aes(fill=cand_party))
 
 mann.fit<-wilcox.test(subset(data, cand_party == 'R')$contb_receipt_amt, subset(data, cand_party == 'D')$contb_receipt_amt)
 ```
@@ -361,8 +403,7 @@ Democrats received nearly 3 times more donations than Republicans.
 ###Who Donates More - Men or Women?
 ```{r, message=F, warning=F}
 qplot(data$predicted_gender, data$contb_receipt_amt, geom='bar', stat='identity')
-ggplot(data, aes(predicted_gender, contb_receipt_amt)) + geom_bar(stat='identity') + facet_wrap(~cand_party)
-ggplot(data, aes(1, log(contb_receipt_amt), fill=predicted_gender)) + geom_boxplot() + facet_grid(~cand_party)
+ggplot(data, aes(predicted_gender, log(contb_receipt_amt +1))) + geom_boxplot() + facet_wrap(~cand_party)
 ```
 
 ###Who Donates More Frequently - Men or Women?
@@ -392,7 +433,30 @@ This histogram reveals distributions similar to what I expected - salaries in th
 data.elect <- data.frame(groupData(subset(data,cand_party=='D' | cand_party == 'R'), elect_delta,cand_party))
 ggplot(data.elect, aes(elect_delta, median_contb)) + geom_line() + facet_grid(~cand_party) + geom_smooth()
 
-ggplot(data,aes(elect_delta, contb_receipt_amt)) + geom_point(alpha = .1, position= position_jitter(), color="red") + coord_trans(y = "sqrt") + geom_line(stat = "summary", fun.y = median) + ylim(0,quantile(data$contb_receipt_amt, 0.95)) 
+ggplot(data,aes(yearmon, contb_receipt_amt)) + geom_point(alpha = .5, position= position_jitter(),color="gray") + geom_line(stat = "summary", fun.y = mean,aes(color=cand_party),size=1.5) + ylim(0,quantile(data$contb_receipt_amt, 0.95)) + scale_x_yearmon()
+```
+
+###Do people make donations on a certain day?
+```{r, message=F, warning=F}
+data <- subset(data, cand_party == 'D' | cand_party == 'R')
+data$month <- month(data$contb_receipt_dt)
+data$year <- year(data$contb_receipt_dt)
+
+data$yearmon <- as.yearmon(as.Date(data$contb_receipt_dt))
+ggplot(data,aes(weekday)) + geom_bar() + facet_wrap(~ cand_party)
+
+
+ggplot(data,aes(1,contb_receipt_amt, fill=cand_party)) + geom_boxplot() + ylim(0, quantile(data$contb_receipt_amt, .95)) + facet_grid(~weekday)
+
+data.weekday <- groupData(data, weekday, cand_party)
+qplot(data=data.weekday, weekday, mean_contb, geom='bar', stat='identity', fill=cand_party)
+
+data.month <- groupData(data,yearmon, cand_party)
+
+ggplot(data, aes(yearmon, contb_receipt_amt))  + scale_x_yearmon() +stat_summary(aes(color=cand_party), geom='line',fun.y=mean) + ylim(0, quantile(data$contb_receipt_amt, .95))
+
+
+ggplot(data, aes(yearmon, contb_receipt_amt))  + scale_x_yearqtr() +stat_summary(aes(color=cand_party), geom='line',fun.y=mean) + ylim(0, quantile(data$contb_receipt_amt, .95)) + facet_wrap(~predicted_gender)
 ```
 
 ###Do people donate more frequently when it is closer to the election?
