@@ -409,7 +409,7 @@ ggplot(data, aes(predicted_gender, log(contb_receipt_amt +1))) + geom_boxplot() 
 ###Who Donates More Frequently - Men or Women?
 ```{r, message=F, warning=F}
 qplot(data$predicted_gender, geom='bar')
-ggplot(data, aes(x=predicted_gender)) + geom_bar() + facet_wrap(~cand_party)
+ggplot(data, aes(x=predicted_gender)) + geom_bar() + facet_wrap(~cand_party)#used
 ```
 
 
@@ -424,14 +424,17 @@ ggplot(data, aes(estimated_salary, contb_receipt_amt)) + geom_point() + xlim(0,q
 ```{r, message=F, warning=F}
 data <- subset(data,cand_party=='D' | cand_party == 'R')
 ggplot(data, aes(estimated_salary)) + geom_histogram() + facet_wrap(~ cand_party) 
-ggplot(subset(data,cand_party=='D' | cand_party == 'R'), aes(1,log(estimated_salary+10))) + geom_boxplot(aes(fill=cand_party))
+ggplot(subset(data,cand_party=='D' | cand_party == 'R'), aes(1,log(estimated_salary+10))) + geom_boxplot(aes(fill=cand_party)) #using in bivariate
+# relationship between age of topic and length of wikipedia article (count of words)
+
 ```
 This histogram reveals distributions similar to what I expected - salaries in the United States often follow a an exponential or log-normal distribution though it does not give a clear indication if there is a relationship between estimated salary and which political party one conbtributes to. The boxplot appears to show that people with higher salaries give to Republicans, but it's far from conclusive. 
 
 ###Do people donate more when it is closer to the election?
 ```{r, message=F, warning=F}
-data.elect <- data.frame(groupData(subset(data,cand_party=='D' | cand_party == 'R'), elect_delta,cand_party))
-ggplot(data.elect, aes(elect_delta, median_contb)) + geom_line() + facet_grid(~cand_party) + geom_smooth()
+data <- subset(data, cand_party == 'D' | cand_party == 'R' )
+data.elect <- groupData(data[,1:33], elect_delta,cand_party)
+
 
 ggplot(data,aes(yearmon, contb_receipt_amt)) + geom_point(alpha = .5, position= position_jitter(),color="gray") + geom_line(stat = "summary", fun.y = mean,aes(color=cand_party),size=1.5) + ylim(0,quantile(data$contb_receipt_amt, 0.95)) + scale_x_yearmon()
 ```
@@ -439,14 +442,15 @@ ggplot(data,aes(yearmon, contb_receipt_amt)) + geom_point(alpha = .5, position= 
 ###Do people make donations on a certain day?
 ```{r, message=F, warning=F}
 data <- subset(data, cand_party == 'D' | cand_party == 'R')
+data$weekday <- weekdays(as.Date(data$contb_receipt_dt))
 data$month <- month(data$contb_receipt_dt)
 data$year <- year(data$contb_receipt_dt)
 
 data$yearmon <- as.yearmon(as.Date(data$contb_receipt_dt))
-ggplot(data,aes(weekday)) + geom_bar() + facet_wrap(~ cand_party)
+ggplot(data,aes(weekday)) + geom_bar() + facet_wrap(~ cand_party)#using
 
 
-ggplot(data,aes(1,contb_receipt_amt, fill=cand_party)) + geom_boxplot() + ylim(0, quantile(data$contb_receipt_amt, .95)) + facet_grid(~weekday)
+ggplot(data,aes(cand_party,contb_receipt_amt)) + geom_boxplot() + ylim(0, quantile(data$contb_receipt_amt, .95)) + facet_grid(~yearmon)
 
 data.weekday <- groupData(data, weekday, cand_party)
 qplot(data=data.weekday, weekday, mean_contb, geom='bar', stat='identity', fill=cand_party)
@@ -473,6 +477,8 @@ table(data[c('cand_party', 'included_gender')])
 ###Do people that live in cities donate more or less?
 ```{r, message=F, warning=F}
 ggplot(data, aes(1,log(contb_receipt_amt+10))) + geom_boxplot() + facet_wrap(~ popbins) + ylim(quantile(log(data$contb_receipt_amt+10), .05),quantile(log(data$contb_receipt_amt+10), .95))
+
+ggplot(data, aes(cand_party, population)) + geom_boxplot() 
 ```
 
 
@@ -501,7 +507,7 @@ ggplot(aes(x=cand_party,y=median_contb), data=data.party) + geom_bar(stat='ident
 ggplot(data,aes(data$elect_delta, color=data$cand_party)) + geom_density() 
 ggplot(data,aes(log(elect_delta +1), color=cand_party)) + geom_density() 
 
-ggplot(aes(x=log(contb_receipt_amt +1)), data=data) + geom_density(aes(color=cand_party))
+ggplot(aes(x=log(contb_receipt_amt +1)), data=data) + geom_histogram(aes(fill=cand_party))
 
 ggplot(aes(x=cand_party,y=count), data=data.party) + geom_bar(stat='identity')
 
@@ -509,15 +515,15 @@ ggplot(aes(x=cand_party,y=median_pop), data=data.party) + geom_bar(stat='identit
 
 ggplot(aes(y=log(contb_receipt_amt),x=1), data=data) + geom_boxplot(aes(fill=cand_party))
 
-data.cand_party.elect_delta <- groupData(data, elect_delta,cand_party)
+data.cand_party.elect_delta <- groupData(data[,1:33], elect_delta,cand_party)
 
-ggplot(data.cand_party.elect_delta, aes(elect_delta, sqrt(sum_contb), color=cand_party)) + geom_point() 
+ggplot(data.cand_party.elect_delta, aes(elect_delta, sqrt(sum_contb))) + geom_point() + geom_smooth(method="lm")
 
 ggplot(data.cand_party.elect_delta, aes(elect_delta, median_contb, color=cand_party)) + geom_point()
 
-data.cand_party.include_gender <- groupData(data, included_gender,cand_party)
+data.cand_party.include_gender <- groupData(data[,1:33], included_gender,cand_party)
 
-ggplot(data.cand_party.include_gender,aes(included_gender,count)) + geom_bar(stat='identity') + facet_wrap(~ cand_party)                                                                                                            
+ggplot(data.cand_party.include_gender,aes(included_gender, count)) + geom_bar(stat='identity') + facet_wrap(~ cand_party)  + scale_x_discrete(breaks = c(0,1))                                                                                                        
 ```
 
 Democrats received a greater number of contributions in small amounts while Republicans received higher contribution amounts from fewer contributors.
