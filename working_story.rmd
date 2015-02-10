@@ -1,8 +1,8 @@
-<center>2012 Presidential Campaign Donations in Ohio
-<p>Aaron Rank</center>
-========================================================
+<h2><center>2012 Presidential Campaign Donations in Ohio</center></h2>
+<p><center><h3>Aaron Rank</h3></center>
+<hr>
 
-```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+```{r  message=FALSE, warning=FALSE, packages}
 require(ggplot2)
 require(arm)
 require(cvTools)
@@ -24,19 +24,25 @@ require(zipcode)
 theme_set(theme_minimal(20))
 ```
 
-```{r echo=FALSE, Load_the_Data}
+```{r  message=FALSE, warning=FALSE, Load_the_Data}
 data <- read.csv('~/projects/udacity_DataR/P00000001-OH.csv', sep=',',row.names=NULL,stringsAsFactors = FALSE)
+
 # The dataset had each column name shifted to the right one place with an additional column at the end filled with NAs. 
 colnames(data)[1:18] <- colnames(data)[2:19] 
 data <- data[1:18]
+
 dim(data)
-names(data)
 str(data)
+head(data[1:8])
+head(data[9:18])
+describe(data$cand_nm)
 ```
-The data contains 19 features which makes it difficult to understand. Ideally, I would like to reduce the number of features to no more than 10. However, what I can tell is that the majority of the conbributions were made to Barack Obama (71%) and Mitt Romney (22%) with the other 12 candidates splitting the remaining 7% of contributions. I can also see that the candidate's party is not included the dataset - it will be necessary to add this information as it is vital to answering the question in which I'm interested - To which party was the contribution made?
+
+###First Look at the Data
+The data contains 19 features which makes it difficult to understand. Ideally, I would like to reduce the number of features to no more than 10. However, what I can tell is that the majority of the conbributions were made to Barack Obama (71%) and Mitt Romney (22%) with the other 12 candidates splitting the remaining 7% of contributions. I can also see that the candidate's party is not included the dataset - it will be necessary to add this information as it is vital to answering the question in which I'm interested - To which party was the contribution made? 
 
 ###Feature Creation and Addition
-```{r echo=FALSE, Additional_Features}
+```{r  message=FALSE, warning=FALSE, Additional_Features}
 # Census data for Ohio
 pops <- fromJSON('~/projects/udacity_DataR/ohio_city_populations.json') 
 
@@ -87,17 +93,14 @@ data$contbr_zip <- substr(as.character(data$contbr_zip),1,5)
 # I'm not concerned with negative donations - I'm not really sure what they mean
 data <- subset(data,contb_receipt_amt >0)
 
-
-
 write.csv(data,'~/projects/udacity_DataR/data_gender_pred.csv')
 ```
 
 
 
-```{r echo=FALSE, Predicting_Gender}
+```{r  message=FALSE, warning=FALSE}
 # Reload the data after running the python scripts
 data <- read.csv('~/projects/udacity_DataR/data_w_salary_gender.csv',stringsAsFactors = FALSE)
-
 
 # making an assumption that if the contributor's name, city, and employer show up more than once, it is the same person
 # this would indicate that they made multiple contributions
@@ -177,7 +180,6 @@ data <- subset(data, estimated_salary!= 'No Data ')
 # estimated salary was a string
 data$estimated_salary <- as.numeric(data$estimated_salary)
 
-
 # making an assumption that if the contributor's name, city, and employer show up more than once, it is the same person
 # this would indicate that they made multiple contributions
 getMultipleContb <- function(data){
@@ -193,10 +195,24 @@ data$year <- year(data$contb_receipt_dt)
 data$yearmon <- as.yearmon(as.Date(data$contb_receipt_dt))
 
 
+# create a sample size to be used for testing/training sets later and to avoid data snooping
+smp_size <- floor(0.75 * nrow(data))
+
+## set the seed to make your partition reproductible
+set.seed(1)
+
+# create index
+index <- sample(seq_len(nrow(data)), size = smp_size)
+
+# data for exploratory analysis
+data <- data[index, ]
+
+# hold data out to avoid data snooping
+held_out_data <- data[-index, ]
 ```
 
 ### Contribution Amount
-```{r echo=FALSE, Univariate_Plots}
+```{r  message=FALSE, warning=FALSE,Univariate_Plots}
 contb.quantile <- quantile(data$contb_receipt_amt, .95)
 ggplot(aes(data$contb_receipt_amt), data=data) + geom_density() + xlim(0,contb.quantile)
 ggplot(aes(log(data$contb_receipt_amt)), data=data) + geom_histogram()  + scale_x_discrete(limits = c(0:round(log(contb.quantile))))
@@ -205,36 +221,36 @@ ggplot(aes(log(data$contb_receipt_amt)), data=data) + geom_histogram()  + scale_
 The contribution amount is not normally distributed, it is closer to a log-normal distribution, and is multi-modal. It appears that the most frequent contribution amounts were less than or equal to $100 with a $100 donation being the most frequent. One can also see that the data contains peaks at specific values such as 100, 250, and 500 - this aspect of the data gives it the feeling of being discrete. 
 
 ### Election Type
-```{r echo=FALSE}
+```{r  message=FALSE, warning=FALSE, echo=FALSE}
 table(data$election_tp)
 ```
 
 election_tp tells in which election the donation was made; namely the Primary or General Election which respectively accounted for 45% and 55% of all donations.
 
 ### Contributor's Occupation & Employer
-```{r, echo=FALSE}
+```{r  message=FALSE, warning=FALSE, echo=FALSE}
 describe(data$contbr_occupation)
 describe(data$contbr_employer)
 ```
 
-There are over 6,000 unique occupations and 11,000 unique employers - far too many visually look at. 
+There are over 4,000 unique occupations and 11,000 unique employers - far too many visually look at. 
 
 ### Contributor's Population - Newly Created Feature
-```{r, echo=FALSE}
+```{r  message=FALSE, warning=FALSE, echo=FALSE}
 ggplot(aes(log(population + 1)), data=data) + geom_histogram()  + xlim(quantile(log(data$population), 0),quantile(log(data$population), .95))
 summary(data$population)
 ```
 
 
-### Number of Days from the General Election the Contribution was Made - Newly Created Feature
-```{r, echo=FALSE}
+### Number of Days from the General Election - Newly Created Feature
+```{r  message=FALSE, warning=FALSE, echo=FALSE}
 qplot(data$elect_delta)
 ```
 
 elect_delta follows the log-normal distribution. This makes sense as American's are typically apathetic towards politics especially when an election is months or years away. The two campaigns were also likely to  have ramped up their efforts to solicit contributions as election day neared. 
 
 ### Candidate's Party - Newly Created Feature
-```{r, echo=FALSE}
+```{r  message=FALSE, warning=FALSE, echo=FALSE}
 qplot(data$cand_party)
 describe(data$cand_party)
 ```
@@ -242,23 +258,24 @@ describe(data$cand_party)
 Democratic candidates received 72% of donations as opposed to the Republicans 28%. This is interesting because Ohio is typically considered a battle ground state meaning that the voting population is equally split between the two parties. 
 
 ### Predicted Gender of Contributor - Newly Created Feature
-```{r, echo=FALSE}
+```{r  message=FALSE, warning=FALSE, echo=FALSE}
 table(data$predicted_gender)
 
 ```
-####Predicting Gender
-I need to predict the gender of the contributors that did not include MR., MRS., or MS. I attempted to use the gender package in R, but it was very slow (it never completed the task, but it had been over 8 hours when I finally stopped it). As such, I decided to use Python's NLTK library for the task and created a script called classify_gender.py. Running classify_gender.py creates a new csv file (data_gender_predicted.csv) with predicted gender names and prints "You classified 0.7704 correct on the test set" to stdout. After running both python scripts, I loaded the results back into R.
 
 
 ### Included Gender - Did the Contributor Indicate their Gender?
-```{r, echo=FALSE}
+```{r  message=FALSE, warning=FALSE, echo=FALSE}
 table(data[c('included_gender')])
 ```
 
 Out of the over 100,000 records, only about 15,000 records exist where the contributor provided an indication of their gender by using "MS.", "MRS.", or "MR.". Using the way back machine, I looked at the Obama and Romney donation page on their website - neither seemed to ask for gender nor have a form for the donor to identify their gender.
 
+####Predicting Gender
+Because so few contributors I need to predict the gender of the contributors that did not include MR., MRS., or MS. I attempted to use the gender package in R, but it was very slow (it never completed the task, but it had been running over 8 hours when I finally stopped it). As such, I decided to use Python's NLTK library for the task and created a script called classify_gender.py. Running classify_gender.py creates a new csv file (data_gender_predicted.csv) with predicted gender names and prints "You classified 0.7704 correct on the test set" to stdout. After running both python scripts, I loaded the results back into R.
+
 ### Contributor's Estimated Salary - Newly Created Feature
-```{r, echo=FALSE}
+```{r  message=FALSE, warning=FALSE, echo=FALSE}
 qplot(data$estimated_salary) + xlim(0,quantile(data$estimated_salary, .95))
 qplot(data$estimated_salary^(1/3) ) +  xlim(0,quantile(data$estimated_salary^(1/3), .95))
 ```
@@ -267,19 +284,18 @@ qplot(data$estimated_salary^(1/3) ) +  xlim(0,quantile(data$estimated_salary^(1/
 Trying to use all of the information provided in the original file and thinking that a person's salary could have predictive power, I wrote a web scraping script, get_estimated_salaries.py, in Python that gets salary information for different occupations. Indeed.com allows you to enter an occupation and zip code and returns an average salary. 
 
 ### Multiple Contributions - Newly Created Feature
-```{r, echo=FALSE}
+```{r  message=FALSE, warning=FALSE, echo=FALSE}
 table(data$multiple_contb)
 ```
 
 I made the assumption that if a contributor's name, city, and employer show up more than once, it is the same person and this would indicate that they made multiple contributions. 
 
-### What is/are the main feature(s) of interest in your dataset?
-
+## First Thoughts
 I am interested to which political party the contribution was made as I will attempt to build a model to predict this. I believe some of the relevant features will be the amount contributed, when the contribution was made, the gender of the contributor, the location of the contributor, the salary of the contributor, and if the contributor made multiple contributions. It would be nice to know the age of the contributor, but this information is difficult to acquire. 
 
 
-# Bivariate Plots Section
-```{r echo=FALSE, Bivariate_Plots}
+## Bivariate Plots
+```{r  message=FALSE, warning=FALSE,Bivariate_Plots}
 data <- subset(data, cand_party == 'R' | cand_party == 'D' )
 groupData <- function(initial_data,...){
 # helper function to make frequent grouping of data with diffrent variables easier
@@ -295,8 +311,7 @@ gps_data<-summarise(gp_data,
                   count = n()) 
 gps_data
 }
-#write.csv(data, 'temp_data.csv')
-#data <- read.csv('temp_data.csv', stringsAsFactors = FALSE)
+
 data.by.party <- groupData(data[,1:33],cand_party)
 
 # Comparison of contribution amount between parties
@@ -339,16 +354,15 @@ ggplot(data, aes(yearmon, population)) + stat_summary(fun.y=mean, geom='line')  
 
 ```
 
-# Bivariate Analysis
+## Bivariate Analysis
 
-### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
 It appears that contributions made to Republicans were higher than those made to Democrats; however, Democrats received a greater number of contributions. The gender breakdown shows that amongst donations made to Democrats, females made more contributions than males. Looking at Republican contributions, males made more contributions than females. This makes sense as females are more likely to identify with Democrats (http://www.people-press.org/2012/06/04/section-9-trends-in-party-affiliation/). 
 
 One of the most evident relationships was that contributions made to Republicans were higher than those made to Democrats while the opposite was true for the number of contributions. The most intriguing relationship, in my opinion, was between contributors who indicated their gender through the use of Mr, Ms, or Mrs in their name - roughly 70% of those who donated to Republicans indicated their gender while less than 1% of Democratic contributors indicated theirs. I have been unable to come up with an explanation for this - I thought that maybe Republicans included a place to indicate gender on their donation form/website, but I was unable to find any indication that this was true. 
 
-# Multivariate Plots Section
+## Multivariate Plots 
 
-```{r echo=FALSE, Multivariate_Plots}
+```{r  message=FALSE, warning=FALSE,Multivariate_Plots}
 ggplot(data,aes(elect_delta)) + geom_histogram(aes(fill=election_tp)) + facet_wrap(~ cand_party)
 
 ggplot(data,aes(yearmon, contb_receipt_amt)) + geom_point(alpha = .5, position= position_jitter(),color="gray") + geom_line(stat = "summary", fun.y = mean,aes(color=cand_party),size=1.5) + ylim(0,quantile(data$contb_receipt_amt, 0.95)) + scale_x_yearmon()
@@ -356,7 +370,9 @@ ggplot(data,aes(yearmon, contb_receipt_amt)) + geom_point(alpha = .5, position= 
 
 data(zipcode)
 data$zip <- clean.zipcodes(data$contbr_zip)
-oh <- subset(zipcode, state=='OH') # zipcode package would change my zipcode in 'data' variable to zip codes in MA for some reason. Subsetting only Ohio values from zipcode seemed to solve this issue
+
+# zipcode package would change my zipcode in 'data' variable to zip codes in MA for some reason. Subsetting only Ohio values from zipcode seemed to solve this issue
+oh <- subset(zipcode, state=='OH') 
 map.data <- merge(subset(data, contb_receipt_amt > 0), oh, by.x='contbr_zip', by.y='zip')
 
 map.plot <- ggplot(data=subset(map.data,cand_party == 'D' | cand_party == 'R'),aes(x=longitude, y=latitude, color=cand_party, size = contb_receipt_amt)) + geom_point(position = position_jitter(w=.08,h=.08)) + scale_size_continuous(breaks = c(50,100,500,1000,2500,5000,10000),range=c(1,15), name='Contribution Amount') + labs(x=NULL, y=NULL, color='Candidate Party') + scale_color_tableau()
@@ -364,17 +380,14 @@ map.plot <- map.plot + theme(panel.grid.major = element_blank(), panel.grid.mino
 map.plot
 ```
 
-The map makes it easy to spot the most populated cities in Ohio. The center mass is Columbus and to its left, you can see a cluster which contains Dayton at the top and Cincinatti at the bottom. The top right cluster is the Cleveland area and the top left is Toledo. The size of each point indicates the amount of the contribution. Contributions to Republicans appear to be larger than contributions to Democrats. However, there are more contributions made to Democrats than Republicans. 
-
-
-# Can we use this data to predict which party a contribution was made to?
+## Can we use this data to predict which party a contributor donated to?
 
 Predicting to which party a contribution was made will require me to classify each contribution as either a Democrat or Republican (For simplicity, I'm going to drop any contributions made to third parties). As I will be tackling a binary classification problem, logistic regression is an appropriate model with which to start. Logistic regression uses a set of covariates to predict probabilities of (binary) class membership. We can then set a threshold to map these probabilities to class labels to solve the classification problem. 
 
 ### Logistic Regression in Detail
 Logistic regression is an extension of the linear regression model with two important differences - the outcome variable and the error terms.
 
-  ##### Outcome Variable
+  <bold>Outcome Variable</bold><p>
   Key to any regression problem is the conditional mean of the outcome variable y given x. In linear regression, we assume that the conditional mean is a linear function taking values in $(-\infty, \infty)$:
   $${E(y|x) =}\; \alpha + \beta{x}$$
   Unlike linear regression, the outcome variable of logistic regression has a conditional mean that takes values within [0,1]. In order to extend the linear regression model to logistic regression, we must map the outcome variable $E(y|x)$ into [0,1] via a transformation called the logistic function. 
@@ -382,7 +395,7 @@ Logistic regression is an extension of the linear regression model with two impo
   The logit function or log-odds function is a transformation of the logistic function. It can be useful in helping interpret the results.
   $${g(x)=}\; \ln({\pi(x)\over {1-\pi(x)}}) = \alpha + \beta{x}$$
   
-  ##### Error Terms
+  <bold>Error Terms</bold><p>
   One of the key assumptions of linear regression is that the error terms follow independent Gaussian distributions with zero mean and constant variance. In logistic regression, the outcome variable can only be 0 or 1. Because of this, the error terms of logistic regression follow a Bernoulli distribution:
   $$\epsilon \sim \beta(0,\pi(1 - \pi))$$
 
@@ -396,27 +409,36 @@ Substituting the definition of $\pi(x)$ into this equation yields
 $${OR = }\; \epsilon^\beta$$
 The relationship between the odds ratio and $\beta$ is what makes logistic regression such a powerful tool. 
 
-```{r, message=F, warning=F}
+```{r  message=FALSE, warning=FALSE}
 # prepare the data set
-glm.data <- data[c(11, 19, 20, 21, 22, 26, 28, 29, 30, 31, 32, 33)]
+train <- data[c(11, 19, 20, 21, 22, 26, 28, 29, 30, 31, 32, 33)]
+test <- held_out_data[c(11, 19, 20, 21, 22, 26, 28, 29, 30, 31, 32, 33)]
 
 # this is America, third parties get ignored
-glm.data <- subset(glm.data, cand_party == 'D' | cand_party == 'R') 
-glm.data <- na.omit(glm.data)
-glm.data$cand_party <- ifelse(glm.data$cand_party == 'D', 1, 0)
-glm.data$predicted_gender <- ifelse(glm.data$predicted_gender == 'male',1,0)
-glm.data$election_tp <- ifelse(glm.data$election_tp == 'G2012',1,0)
+train <- subset(train, cand_party == 'D' | cand_party == 'R') 
+test <- subset(test, cand_party == 'D' | cand_party == 'R') 
 
-smp_size <- floor(0.75 * nrow(glm.data))
-## set the seed to make your partition reproductible
-set.seed(1)
-train_ind <- sample(seq_len(nrow(glm.data)), size = smp_size)
-train <- glm.data[train_ind, ]
-test <- glm.data[-train_ind, ]
+# set D = 1, R = 0
+train$cand_party <- ifelse(train$cand_party == 'D', 1, 0)
+test$cand_party <- ifelse(test$cand_party == 'D', 1, 0)
 
+# set male = 1, female = 0
+train$predicted_gender <- ifelse(train$predicted_gender == 'male',1,0)
+test$predicted_gender <- ifelse(test$predicted_gender == 'male',1,0)
+
+# set general election = 1, primary election = 0
+train$election_tp <- ifelse(train$election_tp == 'G2012',1,0)
+test$election_tp <- ifelse(test$election_tp == 'G2012',1,0)
+
+
+# fit model
 fit <- glm(cand_party ~ log(contb_receipt_amt + 1) + log(estimated_salary+1) + predicted_gender + cbus + cincy + cleveland   + log(elect_delta + 1) + election_tp +  log(population+1) + multiple_contb + included_gender, data=train, family="binomial")
+
+# predict results on our test set
 predpr <- predict(fit, newdata=test,type="response")
 test$predicted <- predpr
+
+# plot coefficients
 coefplot(fit,intercept=FALSE)
 ```
 
@@ -430,7 +452,6 @@ The most striking thing about this plot is the included_gender coefficient - it 
 There are different ways to evaluate the performance a logistic regression model. I chose to use two techniques, the receiver operating characterstic (ROC) curve and cross-validation. 
 
 ####ROC Curve
-(http://www.uphs.upenn.edu/radiology/education/resources/documents/Receiver-operator-characteristic-analysis-primer.pdf, http://www.dataschool.io/roc-curves-and-auc-explained/)
 A ROC curve is a graphical illustration of the performance of a binary classification system that plots the True Positive Rate against False Positive Rate.
  - True Positive Rate $P(\hat{Y}_i=1 | Y_i=1)$ the proportion of 1s (Democrats, in our case) that are correctly identified
  - False Negative Rate $P(\hat{Y}_i=1 | Y_i=0)$ the proportion of 1s (Democrats) that are incorrectly identified
@@ -438,15 +459,13 @@ A ROC curve is a graphical illustration of the performance of a binary classific
 In our ROC curve, we will see the proportion correctly identified as Democrats plotted against the proportion incorrectly identified as Democrats. Plotting the true positive rate against the false positive rate will show the ROC curve and by calculating the area under this curve (AUC), we are able to evaluate the performance of our model. A higher AUC indicates greater predictive power: 
  - auc of 0.5 = no predictive power
  - auc of 1.0 = perfect predictive power 
- 
- (http://gim.unmc.edu/dxtests/roc2.htm)
 
-```{r, message=F, warning=F}
+```{r  message=FALSE, warning=FALSE, message=F, warning=F}
 glm.roc <- roc(test$cand_party ~ predpr)
 auc <- round(glm.roc$auc,2)
 roc.df <- data.frame(specificities=glm.roc$specificities,sensitivities = glm.roc$sensitivities)
 
-roc.plot <- ggplot(roc.df,aes(1-specificities, sensitivities)) + geom_line(aes(), size=0.5) + geom_abline(intercept = 0) + xlab('False Positive Rate (1 - Specificity)') + ylab('True Positive Rate (Sensitivity)') + annotate("text",x=.7,y=0.80,label=paste('The Area Under the Curve is',auc))
+roc.plot <- ggplot(roc.df,aes(1-specificities, sensitivities)) + geom_line(aes(), size=0.5) + geom_abline(intercept = 0) + xlab('False Positive Rate (1 - Specificity)') + ylab('True Positive Rate (Sensitivity)') + annotate("text",x=.50,y=0.80,label=paste('The Area Under the Curve is',auc))
 roc.plot
 ```
 
@@ -456,49 +475,64 @@ As previously mentioned, an AUC of 1 would indicate that our model has perfect p
 
 The second method I used to evaluate my model is cross-validation, specifically a K-Fold Cross-Validation. In my opinion, the results from cross-validation provide a more intuitive way to evaluate our model because it returns a simple metric - the percent of predictions that were incorrectly classified.
 
-Cross-validation involves the following steps: 
- - Randomly split the dataset into k equal partitions.
- - Use partition 1 as the test set & the union of the other partitions as the training set.
- - Find generalization error.
- - Repeat steps 2-3 using a different partition as the test set at each iteration.
- - Take the average generalization error as the estimate of out-of-sample accuracy. 
- 
+Cross-validation involves the following steps:
 
-```{r, message=F, warning=F}
+  - Randomly split the dataset into k equal partitions.
+  - Use partition 1 as the test set & the union of the other partitions as the training set.
+  - Find generalization error.
+  - Repeat steps 2-3 using a different partition as the test set at each iteration.
+  - Take the average generalization error as the estimate of out-of-sample accuracy. 
+
+```{r  message=FALSE, warning=FALSE, message=F, warning=F}
 cv.fit <- cv.glm(train, fit, K=10)
-cv.error <- cv.fit$delta
+cv.error <- cv.fit$delta[1]
 paste("The estimate of the out-of-sample error is",cv.error)
 ```
 
 Our estimated out-of-sample error is 9% - this means that we are correctly classifying 91% of predictions! 
 
 
-# Final Plots and Summary
+## Final Plots and Summary
 
 ### Map
-```{r echo=FALSE, Plot_One}
-map.plot
+```{r  message=FALSE, warning=FALSE,Plot_One}
+map.plot + ggtitle("Contribution Amount by Party and Zip Code")
 ```
 
 The map makes it easy to spot the most populated cities in Ohio. The center mass is Columbus and to its left, you can see a cluster which contains Dayton at the top and Cincinatti at the bottom. The top right cluster is the Cleveland area and the top left is Toledo. The size of each point indicates the amount of the contribution. Contributions to Republicans appear to be larger than contributions to Democrats. However, there are more contributions made to Democrats than Republicans. 
 
-
-
-### Plot Two
-```{r echo=FALSE, Plot_Two}
-ggplot(data,aes(yearmon, contb_receipt_amt)) + geom_point(alpha = .5, position= position_jitter(),color="gray") + geom_line(stat = "summary", fun.y = mean,aes(color=cand_party),size=1.5) + ylim(0,quantile(data$contb_receipt_amt, 0.95)) + scale_x_yearmon() + labs(x='Month and Year', y'Mean of Contribution Amount', color="Candidate's Party")
+### Contribution Amount Over Time
+```{r  message=FALSE, warning=FALSE,Plot_Two}
+ggplot(data,aes(yearmon, contb_receipt_amt)) + geom_point(alpha = .5, position= position_jitter(),color="gray") + geom_line(stat = "summary", fun.y = mean,aes(color=cand_party),size=1.5) + ylim(0,quantile(data$contb_receipt_amt, 0.95)) + scale_x_yearmon() + labs(x='Month and Year', y='Mean Contribution Amount', color="Candidate's Party") + ggtitle("Contribution Amount Over Time")
 ```
 
 This plot depicts the mean contribution made to each party over time. As you can see, contributions made to Republicans were consistently higher than contributions made to Democrats. Further, the mean contribution amount for both parties decreased as it got closer to the election. 
 
 
-### Plot Three
-```{r echo=FALSE, Plot_Three}
-ggplot(data,aes(elect_delta)) + geom_histogram(aes(fill=cand_party)) + labs(x='Days From Election', y='Count', fill="Candidate's Party")
+### Number of Contributions Over Time
+```{r  message=FALSE, warning=FALSE,Plot_Three}
+ggplot(data,aes(elect_delta)) + geom_histogram(aes(fill=cand_party)) + labs(x='Days From Election', y='Count', fill="Candidate's Party") + ggtitle("Number of Contributions Over Time")
 ```
 
 The histogram reveals that as it got closer to election time, both Democrats and Republicans received a greater volume of contributions. This makes sense as Americans are typically apathetic towards politics, especially when an election is a year or more away. However, as the election got closer, compaigns would have ramped up their efforts to solicit contributions and people likely started paying more attention to the election.
 
-------
+<hr>
 
-# Reflection
+## Reflection
+
+Overall, I was satisfied with the results I was able to obtain from my analysis. The most difficult part of the analysis was figuring out ways to extract meaning from the data - this meant that I often had to use the existing data to create new features based on it. However, I feel that it was a great experience because it provided me the opportunity to do a different sort of data wrangling than the typical data cleaning - I actually had to create new data or go out and find new data that would be helpful in my analysis. 
+
+As I previously mentioned when discussing my logistic regression model, the "included_gender" variable was my greatest concern because it seemed odd that so many Republican contributors indicated their gender while so few Democrats did. When I ran the analysis without the "included_gender" variable, the ACU dropped to 0.78 which is respectable, but certainly no where near 0.89 that was obtained by including the variable. Clearly, this analysis would not have been appropriate in an academic setting because I included features that were estimates, such as the predicted_gender and estimated_salary. Because my goal was simply to make the best predictions possible, I did not have an issue including the aforementioned features. 
+
+If I were to continue this analysis or if I were working for a political campaign, I think I would change my focus from classifying which party the contribution was made to, to predicting the amount of the contribution. I feel that being able to predict the amount that a person will contribute could be used by campaigns to assist with their financial forecasting - something that must be difficult when all of your funding relies on donations. 
+
+
+####Resources
+  - http://www.uphs.upenn.edu/radiology/education/resources/documents/Receiver-operator-characteristic-analysis-primer.pdf
+  - http://www.dataschool.io/roc-curves-and-auc-explained/
+  - Lecture Notes - General Assembly's Introduction to Data Science taught by Jason Dolatshahi.
+  - http://www.city-data.com
+  - http://www.indeed.com/salary
+  - http://factfinder.census.gov/faces/nav/jsf/pages/index.xhtml
+  - http://gim.unmc.edu/dxtests/roc2.htm
+  - http://www.people-press.org/2012/06/04/section-9-trends-in-party-affiliation/
