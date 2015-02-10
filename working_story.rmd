@@ -21,7 +21,7 @@ require(zoo)
 require(scales)
 require(stringr)
 require(zipcode)
-theme_set(theme_minimal(20))
+theme_set(theme_minimal(9))
 ```
 
 ```{r  message=FALSE, warning=FALSE, Load_the_Data}
@@ -218,7 +218,7 @@ ggplot(aes(data$contb_receipt_amt), data=data) + geom_density() + xlim(0,contb.q
 ggplot(aes(log(data$contb_receipt_amt)), data=data) + geom_histogram()  + scale_x_discrete(limits = c(0:round(log(contb.quantile))))
 ```
 
-The contribution amount is not normally distributed, it is closer to a log-normal distribution, and is multi-modal. It appears that the most frequent contribution amounts were less than or equal to $100 with a $100 donation being the most frequent. One can also see that the data contains peaks at specific values such as 100, 250, and 500 - this aspect of the data gives it the feeling of being discrete. 
+The contribution amount is not normally distributed, it is closer to a log-normal distribution, and is multi-modal. It appears that the most frequent contribution amounts were less than or equal to $100. One can also see that the data contains peaks at specific values such as 100, 250, and 500 - this aspect of the data gives it the feeling of being discrete. 
 
 ### Election Type
 ```{r  message=FALSE, warning=FALSE, echo=FALSE}
@@ -387,7 +387,7 @@ Predicting to which party a contribution was made will require me to classify ea
 ### Logistic Regression in Detail
 Logistic regression is an extension of the linear regression model with two important differences - the outcome variable and the error terms.
 
-  <bold>Outcome Variable</bold><p>
+  <span style="font-weight:bold">Outcome Variable</span><p>
   Key to any regression problem is the conditional mean of the outcome variable y given x. In linear regression, we assume that the conditional mean is a linear function taking values in $(-\infty, \infty)$:
   $${E(y|x) =}\; \alpha + \beta{x}$$
   Unlike linear regression, the outcome variable of logistic regression has a conditional mean that takes values within [0,1]. In order to extend the linear regression model to logistic regression, we must map the outcome variable $E(y|x)$ into [0,1] via a transformation called the logistic function. 
@@ -395,7 +395,7 @@ Logistic regression is an extension of the linear regression model with two impo
   The logit function or log-odds function is a transformation of the logistic function. It can be useful in helping interpret the results.
   $${g(x)=}\; \ln({\pi(x)\over {1-\pi(x)}}) = \alpha + \beta{x}$$
   
-  <bold>Error Terms</bold><p>
+  <span style="font-weight:bold">Error Terms</span><p>
   One of the key assumptions of linear regression is that the error terms follow independent Gaussian distributions with zero mean and constant variance. In logistic regression, the outcome variable can only be 0 or 1. Because of this, the error terms of logistic regression follow a Bernoulli distribution:
   $$\epsilon \sim \beta(0,\pi(1 - \pi))$$
 
@@ -405,7 +405,7 @@ In linear regression, the parameter $\beta$ represents the change in the respons
 The odds ratio of a binary event is given by the odds of the event divided by the odds of its complement: 
 $${OR =}\; {O(x=1)\over{O(x=0)}} = {\pi(i)/(1-\pi(1))\over{\pi(i)/(0-\pi(0))}}$$
 
-Substituting the definition of $\pi(x)$ into this equation yields
+Substituting the definition of $\pi(x)$ into this equation yields (after a little algebra)
 $${OR = }\; \epsilon^\beta$$
 The relationship between the odds ratio and $\beta$ is what makes logistic regression such a powerful tool. 
 
@@ -445,7 +445,7 @@ coefplot(fit,intercept=FALSE)
 ###Coefficient Plot
 Instead of simply looking at a print out of the coefficients, I find it much easier to understand my model with a visualization. The y-axis of this plot containes all of the covariates in my model and the x-axis represents coefficients. The distance a point lies from zero is indicative of its influence in the model - the closer to zero, the less influential. Negative coefficients are associated with Republicans and positive coefficients with Democrats - this is true simply because I encoded Republicans as 0 and Democrats as 1. A negative coefficient will therefore "pull" down towards 0 and a postive coefficient will "push" up towards 1. 
 
-The most striking thing about this plot is the included_gender coefficient - it is very far away from zero on the negative side. Thinking about it, this makes sense because so many Republican contributors included their gender while nearly none of Democratic contributors included theirs. The size of this coefficient increases my suspision that there is something dubious about my included_gender variable. However, because I was unable to identify any explanations as to why Republican contributors included this information and this is a fun side project, I'll ignore my reservations about excluding this variable in my model. However, if I were in this situation in a legitimate work or research setting, I would not include this variable without extensive addtional research. 
+The most striking thing about this plot is the included_gender coefficient - it is very far away from zero on the negative side. Thinking about it, this makes sense because so many Republican contributors included their gender while nearly none of Democratic contributors included theirs. The size of this coefficient increases my suspision that there is something dubious about my included_gender variable. However, because I was unable to identify any explanations as to why Republican contributors included this information and this is a fun side project, I'll ignore my reservations about including this variable in my model. However, if I were in this situation in a legitimate work or research setting, I would not include this variable without extensive addtional research. 
 
 
 ###Evaluating Performance
@@ -453,12 +453,14 @@ There are different ways to evaluate the performance a logistic regression model
 
 ####ROC Curve
 A ROC curve is a graphical illustration of the performance of a binary classification system that plots the True Positive Rate against False Positive Rate.
- - True Positive Rate $P(\hat{Y}_i=1 | Y_i=1)$ the proportion of 1s (Democrats, in our case) that are correctly identified
- - False Negative Rate $P(\hat{Y}_i=1 | Y_i=0)$ the proportion of 1s (Democrats) that are incorrectly identified
+
+  - True Positive Rate $P(\hat{Y}_i=1 | Y_i=1)$ the proportion of 1s (Democrats, in our case) that are correctly identified
+  - False Negative Rate $P(\hat{Y}_i=1 | Y_i=0)$ the proportion of 1s (Democrats) that are incorrectly identified
  
 In our ROC curve, we will see the proportion correctly identified as Democrats plotted against the proportion incorrectly identified as Democrats. Plotting the true positive rate against the false positive rate will show the ROC curve and by calculating the area under this curve (AUC), we are able to evaluate the performance of our model. A higher AUC indicates greater predictive power: 
- - auc of 0.5 = no predictive power
- - auc of 1.0 = perfect predictive power 
+
+  - auc of 0.5 = no predictive power
+  - auc of 1.0 = perfect predictive power 
 
 ```{r  message=FALSE, warning=FALSE, message=F, warning=F}
 glm.roc <- roc(test$cand_party ~ predpr)
@@ -489,21 +491,21 @@ cv.error <- cv.fit$delta[1]
 paste("The estimate of the out-of-sample error is",cv.error)
 ```
 
-Our estimated out-of-sample error is 9% - this means that we are correctly classifying 91% of predictions! 
+Our estimated out-of-sample error is near 9% - this means that we are correctly classifying about 91% of predictions! 
 
 
 ## Final Plots and Summary
 
 ### Map
 ```{r  message=FALSE, warning=FALSE,Plot_One}
-map.plot + ggtitle("Contribution Amount by Party and Zip Code")
+map.plot + ggtitle("Contribution Amount by Party and Zip Code") + theme(plot.title=element_text(size=20))
 ```
 
 The map makes it easy to spot the most populated cities in Ohio. The center mass is Columbus and to its left, you can see a cluster which contains Dayton at the top and Cincinatti at the bottom. The top right cluster is the Cleveland area and the top left is Toledo. The size of each point indicates the amount of the contribution. Contributions to Republicans appear to be larger than contributions to Democrats. However, there are more contributions made to Democrats than Republicans. 
 
 ### Contribution Amount Over Time
 ```{r  message=FALSE, warning=FALSE,Plot_Two}
-ggplot(data,aes(yearmon, contb_receipt_amt)) + geom_point(alpha = .5, position= position_jitter(),color="gray") + geom_line(stat = "summary", fun.y = mean,aes(color=cand_party),size=1.5) + ylim(0,quantile(data$contb_receipt_amt, 0.95)) + scale_x_yearmon() + labs(x='Month and Year', y='Mean Contribution Amount', color="Candidate's Party") + ggtitle("Contribution Amount Over Time")
+ggplot(data,aes(yearmon, contb_receipt_amt)) + geom_point(alpha = .5, position= position_jitter(),color="gray") + geom_line(stat = "summary", fun.y = mean,aes(color=cand_party),size=1.5) + ylim(0,quantile(data$contb_receipt_amt, 0.95)) + scale_x_yearmon() + labs(x='Month and Year', y='Mean Contribution Amount', color="Candidate's Party") + ggtitle("Contribution Amount Over Time") + theme(plot.title=element_text( size=20), axis.title.x  = element_text(size=16), axis.title.y  = element_text(size=16))
 ```
 
 This plot depicts the mean contribution made to each party over time. As you can see, contributions made to Republicans were consistently higher than contributions made to Democrats. Further, the mean contribution amount for both parties decreased as it got closer to the election. 
@@ -511,7 +513,7 @@ This plot depicts the mean contribution made to each party over time. As you can
 
 ### Number of Contributions Over Time
 ```{r  message=FALSE, warning=FALSE,Plot_Three}
-ggplot(data,aes(elect_delta)) + geom_histogram(aes(fill=cand_party)) + labs(x='Days From Election', y='Count', fill="Candidate's Party") + ggtitle("Number of Contributions Over Time")
+ggplot(data,aes(elect_delta)) + geom_histogram(aes(fill=cand_party)) + labs(x='Days From Election', y='Count', fill="Candidate's Party") + ggtitle("Number of Contributions Over Time") + theme(plot.title=element_text( size=20), axis.title.x  = element_text(size=16), axis.title.y  = element_text(size=16))
 ```
 
 The histogram reveals that as it got closer to election time, both Democrats and Republicans received a greater volume of contributions. This makes sense as Americans are typically apathetic towards politics, especially when an election is a year or more away. However, as the election got closer, compaigns would have ramped up their efforts to solicit contributions and people likely started paying more attention to the election.
